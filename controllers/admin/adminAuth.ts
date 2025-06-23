@@ -4,6 +4,10 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import Admin from '../../models/db/admin';
+import User from '../../models/db/user';
+import Member from '../../models/db/member';
+import Group from '../../models/db/group';
+import Message from '../../models/db/message';
 import AccessToken from '../../models/db/accessToken';
 import RefreshToken from '../../models/db/refreshToken';
 
@@ -116,5 +120,42 @@ export const adminLogout = async (req: Request, res: Response): Promise<void> =>
       success: false,
       message: 'Error during logout',
     });
+  }
+};
+
+
+export const getAdminStats = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const [totalUsers, totalMembers, totalGroups] = await Promise.all([
+      User.countDocuments(),
+      Member.countDocuments(),
+      Group.countDocuments(),
+    ]);
+
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+
+    const activeUserIds = await Message.distinct('senderId', {
+      timestamp: { $gte: oneMonthAgo },
+      senderModel: 'User', // Only count user-sent messages
+    });
+
+    const activeUsersCount = activeUserIds.length;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalUsers,
+        totalMembers,
+        totalGroups,
+        activeUsers: activeUsersCount,
+      },
+    });
+  } catch (error) {
+    next(error);
   }
 };

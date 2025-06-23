@@ -1,5 +1,5 @@
 import express from 'express';
-import { adminLogin, adminLogout } from '../../controllers/admin/adminAuth';
+import { adminLogin, adminLogout, getAdminStats } from '../../controllers/admin/adminAuth';
 import { refreshAdminToken } from '../../controllers/admin/refreshAdminTocken';
 import adminGroupRoutes from './adminGroupRoutes';
 
@@ -108,6 +108,48 @@ router.post('/logout', adminLogout);
  *         description: Invalid or expired refresh token
  */
 router.post('/refresh-token', refreshAdminToken);
+
+/**
+ * @swagger
+ * /api/admin/dashboard/stats:
+ *   get:
+ *     summary: Get admin dashboard statistics
+ *     tags: [AdminAuth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved statistics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   description: Indicates if the request was successful
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalUsers:
+ *                       type: integer
+ *                       description: Total number of registered users
+ *                     totalMembers:
+ *                       type: integer
+ *                       description: Total number of members in the system
+ *                     totalGroups:
+ *                       type: integer
+ *                       description: Total number of created groups
+ *                     activeUsers:
+ *                       type: integer
+ *                       description: Number of users who sent a message in the last 30 days
+ *       401:
+ *         description: Unauthorized access
+ *       500:
+ *         description: Server error
+ */
+
+router.get('/dashboard/stats', getAdminStats);
 
 router.use('/', adminGroupRoutes); 
 

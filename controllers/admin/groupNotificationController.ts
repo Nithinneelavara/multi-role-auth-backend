@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import Group from '../../models/db/group';
 import User from '../../models/db/user';
+import GroupMessage from '../../models/db/message';
 import { sendNotification } from '../../socket';
 
-// Utility to safely extract userId from req.user
+// Helper to safely extract user ID from request
 function getUserId(req: Request): string {
   if (req.user && typeof req.user === 'object' && '_id' in req.user) {
     return (req.user as any)._id;
@@ -11,9 +12,7 @@ function getUserId(req: Request): string {
   throw new Error('Invalid or missing user');
 }
 
-
- // Admin sends a socket notification to all approved members in their groups.
- 
+// Send notification to all groups of the admin
 export const notifyGroupMembersViaSocket = async (
   req: Request,
   res: Response,
@@ -51,31 +50,28 @@ export const notifyGroupMembersViaSocket = async (
         sendNotification(
           user._id.toString(),
           message,
-          {
-            groupId: group._id,
-            groupName: group.groupName,
-          },
+          { groupId: group._id, groupName: group.groupName },
           'user'
         );
       });
 
-       sendNotification(
+      sendNotification(
         group._id.toString(),
         message,
-        {
-          groupId: group._id,
-          groupName: group.groupName,
-        },
+        { groupId: group._id, groupName: group.groupName },
         'group'
       );
 
-      // Save the message in the group's notifications array
-      group.notifications.push({
+      await GroupMessage.create({
+        messageType: 'admin',
+        senderId: adminId,
+        senderModel: 'Admin',
+        groupId: group._id,
+        groupName: group.groupName,
         message,
         timestamp: new Date(),
       });
 
-      await group.save();
       totalNotified += approvedMembers.length;
     }
 
@@ -89,6 +85,7 @@ export const notifyGroupMembersViaSocket = async (
   }
 };
 
+// Send notification to a specific group
 export const notifySpecificGroup = async (
   req: Request,
   res: Response,
@@ -96,10 +93,9 @@ export const notifySpecificGroup = async (
 ) => {
   try {
     const adminId = getUserId(req);
-    const groupId = req.params.groupId; // ✅ Use from route param
+    const groupId = req.params.groupId;
     const { message } = req.body;
 
-    // Validate inputs
     if (!groupId || !message || typeof message !== 'string') {
       req.apiResponse = {
         success: false,
@@ -108,7 +104,6 @@ export const notifySpecificGroup = async (
       return next();
     }
 
-    // Check if group belongs to this admin
     const group = await Group.findOne({ _id: groupId, createdBy: adminId });
     if (!group) {
       req.apiResponse = {
@@ -118,20 +113,13 @@ export const notifySpecificGroup = async (
       return next();
     }
 
-    // Get all approved users in the group
-    const approvedMembers = await User.find({
-      _id: { $in: group.members }
-    });
+    const approvedMembers = await User.find({ _id: { $in: group.members } });
 
-    // Send socket notification to each approved member
-    approvedMembers.forEach(user => {
+    approvedMembers.forEach((user) => {
       sendNotification(
         user._id.toString(),
         message,
-        {
-          groupId: group._id,
-          groupName: group.groupName
-        },
+        { groupId: group._id, groupName: group.groupName },
         'user'
       );
     });
@@ -139,20 +127,19 @@ export const notifySpecificGroup = async (
     sendNotification(
       group._id.toString(),
       message,
-      {
-        groupId: group._id,
-        groupName: group.groupName
-      },
+      { groupId: group._id, groupName: group.groupName },
       'group'
     );
 
-    // Save the message in the group notifications array
-    group.notifications.push({
+    await GroupMessage.create({
+      messageType: 'admin',
+      senderId: adminId,
+      senderModel: 'Admin',
+      groupId: group._id,
+      groupName: group.groupName,
       message,
       timestamp: new Date(),
     });
-
-    await group.save();
 
     req.apiResponse = {
       success: true,
@@ -160,11 +147,11 @@ export const notifySpecificGroup = async (
     };
     next();
   } catch (error) {
-    console.error('Error in notifySpecificGroup:', error);
     next(error);
   }
 };
 
+// Retrieve all group notifications sent by the admin
 export const getGroupNotifications = async (
   req: Request,
   res: Response,
@@ -172,26 +159,34 @@ export const getGroupNotifications = async (
 ) => {
   try {
     const adminId = getUserId(req);
-    const groups = await Group.find({ createdBy: adminId });
+    const messages = await GroupMessage.find({ senderId: adminId, messageType: 'admin' });
 
-    let totalMessagesSentByAdmin = 0;
+    const grouped = messages.reduce((acc: any, msg) => {
+      const id = msg.groupId?.toString();
+      if (!id) return acc;
 
-    const result = groups.map(group => {
-      const groupNotificationCount = group.notifications.length;
-      totalMessagesSentByAdmin += groupNotificationCount;
+      if (!acc[id]) {
+        acc[id] = {
+          groupId: msg.groupId,
+          groupName: msg.groupName,
+          totalMessages: 0,
+          notifications: [],
+        };
+      }
+      acc[id].totalMessages++;
+      acc[id].notifications.push({
+        message: msg.message,
+        timestamp: msg.timestamp,
+      });
+      return acc;
+    }, {});
 
-      return {
-        groupId: group._id,
-        groupName: group.groupName,
-        totalMessages: groupNotificationCount,
-        notifications: group.notifications,
-      };
-    });
+    const result = Object.values(grouped);
 
     req.apiResponse = {
       success: true,
       message: result.length > 0 ? 'Group notifications fetched.' : 'No notifications found.',
-      totalMessagesSentByAdmin,
+      totalMessagesSentByAdmin: messages.length,
       data: result,
     };
 
