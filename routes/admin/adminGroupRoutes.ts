@@ -322,6 +322,13 @@ router.post('/groups/:groupId/notify', entryLogger, protectAdmin, notifySpecific
  *     tags: [Admin - Groups]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: groupId
+ *         schema:
+ *           type: string
+ *         required: false
+ *         description: (Optional) Filter notifications by group ID
  *     responses:
  *       200:
  *         description: List of group notifications
@@ -332,8 +339,13 @@ router.post('/groups/:groupId/notify', entryLogger, protectAdmin, notifySpecific
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
  *                 message:
  *                   type: string
+ *                   example: Group notifications fetched.
+ *                 totalMessagesSentByAdmin:
+ *                   type: integer
+ *                   example: 12
  *                 data:
  *                   type: array
  *                   items:
@@ -345,6 +357,9 @@ router.post('/groups/:groupId/notify', entryLogger, protectAdmin, notifySpecific
  *                       groupName:
  *                         type: string
  *                         example: Alpha Group
+ *                       totalMessages:
+ *                         type: integer
+ *                         example: 5
  *                       notifications:
  *                         type: array
  *                         items:
@@ -356,7 +371,15 @@ router.post('/groups/:groupId/notify', entryLogger, protectAdmin, notifySpecific
  *                             timestamp:
  *                               type: string
  *                               format: date-time
+ *                               example: 2025-06-23T10:30:00.000Z
+ *       400:
+ *         description: Invalid groupId
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
  */
+
 router.get('/groups/notifications', entryLogger, protectAdmin, getGroupNotifications, exitLogger);
 
 export default router;

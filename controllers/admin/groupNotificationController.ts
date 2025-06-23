@@ -3,6 +3,7 @@ import Group from '../../models/db/group';
 import User from '../../models/db/user';
 import GroupMessage from '../../models/db/message';
 import { sendNotification } from '../../socket';
+import mongoose from 'mongoose';
 
 // Helper to safely extract user ID from request
 function getUserId(req: Request): string {
@@ -159,7 +160,18 @@ export const getGroupNotifications = async (
 ) => {
   try {
     const adminId = getUserId(req);
-    const messages = await GroupMessage.find({ senderId: adminId, messageType: 'admin' });
+    const groupId = req.query.groupId as string | undefined;
+
+    const filter: any = {
+      senderId: adminId,
+      messageType: 'admin',
+    };
+
+    if (groupId && mongoose.Types.ObjectId.isValid(groupId)) {
+      filter.groupId = new mongoose.Types.ObjectId(groupId);
+    }
+
+    const messages = await GroupMessage.find(filter);
 
     const grouped = messages.reduce((acc: any, msg) => {
       const id = msg.groupId?.toString();
@@ -173,11 +185,13 @@ export const getGroupNotifications = async (
           notifications: [],
         };
       }
+
       acc[id].totalMessages++;
       acc[id].notifications.push({
         message: msg.message,
         timestamp: msg.timestamp,
       });
+
       return acc;
     }, {});
 
@@ -185,7 +199,9 @@ export const getGroupNotifications = async (
 
     req.apiResponse = {
       success: true,
-      message: result.length > 0 ? 'Group notifications fetched.' : 'No notifications found.',
+      message: result.length > 0
+        ? `Group notification${groupId ? '' : 's'} fetched.`
+        : 'No notifications found.',
       totalMessagesSentByAdmin: messages.length,
       data: result,
     };

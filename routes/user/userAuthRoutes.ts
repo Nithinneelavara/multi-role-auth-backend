@@ -1,10 +1,10 @@
 import express from 'express';
 import passport from 'passport';
-import { userLogin, userLogout, getUserData } from '../../controllers/user/userAuth' // adjust path as needed
-import { entryLogger } from '../../middleware/entrypoint'; // optional: if you have entry logs
-import { exitLogger } from '../../middleware/exitpoint'; // optional: if you use exit logs
+import { userLogin, userLogout, getUserData, forgotPassword, resetPassword } from '../../controllers/user/userAuth' 
+import { entryLogger } from '../../middleware/entrypoint'; 
+import { exitLogger } from '../../middleware/exitpoint'; 
 import { validateRequest } from '../../middleware/validateRequest';
-import { LoginValidation } from '../../validators/loginValidator'; // optional validator
+import { LoginValidation } from '../../validators/loginValidator'; 
 import { refreshUserToken } from '../../controllers/user/refreshUserToken';
 
 const router = express.Router();
@@ -135,7 +135,70 @@ router.get('/me',entryLogger, authenticateEither, getUserData, exitLogger);
  *       403:
  *         description: Invalid or expired refresh token
  */
+
 router.post('/refresh', entryLogger, refreshUserToken, exitLogger);
+
+/**
+ * @swagger
+ * /api/auth/forgot-password:
+ *   post:
+ *     tags: [User Auth]
+ *     summary: Send OTP to user's email for password reset
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@example.com
+ *     responses:
+ *       200:
+ *         description: If email exists, OTP has been sent
+ *       500:
+ *         description: Server error
+ */
+router.post('/forgot-password', entryLogger, forgotPassword, exitLogger);
+
+/**
+ * @swagger
+ * /api/auth/reset-password:
+ *   post:
+ *     tags: [User Auth]
+ *     summary: Reset user password using OTP
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, otp, newPassword]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@example.com
+ *               otp:
+ *                 type: string
+ *                 example: "123456"
+ *               newPassword:
+ *                 type: string
+ *                 example: newpassword123
+ *     responses:
+ *       200:
+ *         description: Password has been reset successfully
+ *       400:
+ *         description: Invalid or expired OTP
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
+ */
+router.post('/reset-password', entryLogger, resetPassword, exitLogger);
 
 export default router;
 
