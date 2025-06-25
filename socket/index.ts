@@ -2,7 +2,7 @@ import { Server } from 'socket.io';
 import { Notification } from '../models/db/notification';
 import { MemberNotification } from '../models/db/memberNotification';
 import Group from '../models/db/group';
-import Message from '../models/db/message'; // Unified message model (group/user)
+import Message from '../models/db/message'; 
 
 let io: Server;
 
@@ -24,15 +24,15 @@ export const initSocket = (server: any) => {
       const role = userId ? 'User' : memberId ? 'Member' : 'Group';
       console.log(`${role} ${finalId} joined room ${roomName}`);
     } else {
-      console.warn('❌ Connection rejected: No userId, memberId, or groupId provided.');
+      console.warn(' Connection rejected: No userId, memberId, or groupId provided.');
     }
 
-    // 🔄 USER-TO-USER MESSAGE HANDLING
+    //  USER-TO-USER MESSAGE HANDLING
     socket.on('send-user-message', async ({ toUserId, message }) => {
       const fromUserId = socket.handshake.query.userId as string;
 
       if (!fromUserId || !toUserId || !message) {
-        console.warn('⚠️ Invalid user-to-user message payload.');
+        console.warn(' Invalid user-to-user message payload.');
         return;
       }
 
@@ -45,7 +45,7 @@ export const initSocket = (server: any) => {
 
       // 📤 Emit to recipient's room
       io.to(`notification-${toUserId}`).emit(`direct-message-${toUserId}`, payload);
-      console.log(`📤 User message sent from ${fromUserId} to ${toUserId}`);
+      console.log(` User message sent from ${fromUserId} to ${toUserId}`);
 
       // 💾 Save user-to-user message
       try {
@@ -57,9 +57,9 @@ export const initSocket = (server: any) => {
           message,
           timestamp: new Date(),
         });
-        console.log('💾 User-to-user message saved to DB');
+        console.log(' User-to-user message saved to DB');
       } catch (err) {
-        console.error('❌ Error saving user message:', err);
+        console.error(' Error saving user message:', err);
       }
     });
 
@@ -71,7 +71,7 @@ export const initSocket = (server: any) => {
   return io;
 };
 
-// 🔔 GENERIC NOTIFICATION HANDLER (user / member / group)
+//  GENERIC NOTIFICATION HANDLER (user / member / group)
 export function sendNotification(
   targetId: string,
   message: string,
@@ -85,11 +85,11 @@ export function sendNotification(
     const event = `notification-${targetId}`;
     const payload = { targetId, message, data };
 
-    // 📢 Emit notification
+    //  Emit notification
     io.to(room).emit(event, payload);
-    console.log(`📢 ${role} notification sent to ${room}`);
+    console.log(` ${role} notification sent to ${room}`);
 
-    // 💾 USER OR MEMBER NOTIFICATIONS
+    //  USER OR MEMBER NOTIFICATIONS
     if (role === 'user' || role === 'member') {
       const NotificationModel = role === 'member' ? MemberNotification : Notification;
 

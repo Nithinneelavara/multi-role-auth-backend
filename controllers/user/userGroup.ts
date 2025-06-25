@@ -3,6 +3,8 @@ import Group from "../../models/db/group";
 import Message from "../../models/db/message";
 import JoinRequest from "../../models/db/joinRequest";
 import { sendNotification } from "../../socket";
+import User from '../../models/db/user';
+import mongoose from "mongoose";
 
 // ----------- Helper Function for Safe User ID Extraction -----------
 function getUserId(req: Request): string {
@@ -212,13 +214,14 @@ export const getMyGroupMessages = async (
 // ---------------------------
 // 📤 SEND USER-TO-USER MESSAGE
 // ---------------------------
+
 export const sendUserMessage = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const senderId = getUserId(req);
+    const senderId = getUserId(req)?.toString();
     const { receiverId, message } = req.body;
 
     if (!receiverId || !message || typeof message !== "string") {
@@ -226,6 +229,14 @@ export const sendUserMessage = async (
         success: false,
         message:
           "receiverId and message (in request body) are required and must be valid",
+      };
+      return next();
+    }
+
+    if (receiverId === senderId) {
+      req.apiResponse = {
+        success: false,
+        message: "You cannot send a message to yourself.",
       };
       return next();
     }
@@ -262,9 +273,11 @@ export const sendUserMessage = async (
   }
 };
 
+
 // ------------------------------------------
 // 📥 GET USER-TO-USER CHAT HISTORY
 // ------------------------------------------
+
 export const getUserChatHistory = async (
   req: Request,
   res: Response,
@@ -272,54 +285,46 @@ export const getUserChatHistory = async (
 ) => {
   try {
     const currentUserId = getUserId(req)?.toString();
-    const filterUserId = req.query.userId?.toString(); // optional filter
+    const filterUserId = req.query.userId?.toString();
 
-    const baseQuery: any = {
-      messageType: 'user',
-      receiverId: { $exists: true },
-      $or: [
-        { senderId: currentUserId },
-        { receiverId: currentUserId }
-      ]
-    };
-
-    // ✅ If specific userId is provided, filter for messages only with that user
-    if (filterUserId) {
-      baseQuery.$or = [
-        { senderId: currentUserId, receiverId: filterUserId },
-        { senderId: filterUserId, receiverId: currentUserId }
-      ];
+    if (!filterUserId) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing userId in query. Please specify a userId to view chat history.",
+      });
     }
 
-    const messages = await Message.find(baseQuery).sort({ timestamp: 1 });
+    // ✅ Mark messages from them to me as read
+    await Message.updateMany(
+      {
+        messageType: 'user',
+        senderId: new mongoose.Types.ObjectId(filterUserId),
+        receiverId: new mongoose.Types.ObjectId(currentUserId),
+        isRead: false,
+      },
+      { $set: { isRead: true } }
+    );
 
-    const conversations: Record<string, any[]> = {};
+    // ✅ Get all messages between current user and target user
+    const messages = await Message.find({
+      messageType: 'user',
+      $or: [
+        { senderId: currentUserId, receiverId: filterUserId },
+        { senderId: filterUserId, receiverId: currentUserId },
+      ],
+    }).sort({ timestamp: 1 });
 
-    messages.forEach((msg) => {
-      const senderId = msg.senderId?.toString();
-      const receiverId = msg.receiverId?.toString();
-
-      const isSentByMe = senderId === currentUserId;
-      const otherUserId = isSentByMe ? receiverId : senderId;
-      if (!otherUserId) return;
-
-      if (!conversations[otherUserId]) {
-        conversations[otherUserId] = [];
-      }
-
-      conversations[otherUserId].push({
-        message: msg.message,
-        timestamp: msg.timestamp,
-        direction: isSentByMe ? 'sent' : 'received',
-      });
-    });
+    const chatHistory = messages.map((msg) => ({
+      message: msg.message,
+      timestamp: msg.timestamp,
+      direction: msg.senderId.toString() === currentUserId ? 'sent' : 'received',
+      isRead: msg.isRead ?? false,
+    }));
 
     req.apiResponse = {
       success: true,
-      message: filterUserId
-        ? `Chat history with user ${filterUserId}`
-        : 'Chat history grouped by user',
-      data: conversations,
+      message: `Chat history with user ${filterUserId}`,
+      data: chatHistory,
     };
 
     next();
@@ -328,3 +333,89 @@ export const getUserChatHistory = async (
   }
 };
 
+
+// ---------------------------
+// 📇 GET MY CONTACTS
+// ---------------------------
+
+export const getMyContacts = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const currentUserId = (req.user as any)._id.toString();
+    const filterUserId = req.query.userId?.toString(); // clicked user ID
+
+    // 🚀 Case 1: Show chat history with specific user
+    if (filterUserId) {
+  
+      // 📨 Fetch full conversation
+      const messages = await Message.find({
+        messageType: 'user',
+        $or: [
+          { senderId: currentUserId, receiverId: filterUserId },
+          { senderId: filterUserId, receiverId: currentUserId },
+        ],
+      })
+        .sort({ timestamp: 1 })
+        .lean();
+
+      const formattedMessages = messages.map((msg) => ({
+        message: msg.message,
+        timestamp: msg.timestamp,
+        direction: msg.senderId.toString() === currentUserId ? 'sent' : 'received',
+        isRead: msg.isRead ?? false,
+      }));
+
+      req.apiResponse = {
+        success: true,
+        message: `Chat history with user ${filterUserId}`,
+        data: {
+          [filterUserId]: formattedMessages,
+        },
+      };
+      return next();
+    }
+
+    // 🧭 Case 2: Return contact list
+    const messages = await Message.find({
+      messageType: 'user',
+      $or: [
+        { senderId: currentUserId },
+        { receiverId: currentUserId },
+      ],
+    }).lean();
+
+    const contactIdSet = new Set<string>();
+    messages.forEach((msg) => {
+      const sender = msg.senderId?.toString();
+      const receiver = msg.receiverId?.toString();
+      if (sender && sender !== currentUserId) contactIdSet.add(sender);
+      if (receiver && receiver !== currentUserId) contactIdSet.add(receiver);
+    });
+
+    const contactIds = Array.from(contactIdSet);
+
+    const users = await User.find({ _id: { $in: contactIds } }).select(
+      '_id first_name last_name'
+    );
+
+    const contacts = contactIds.map((id) => {
+      const user = users.find((u) => u._id.toString() === id);
+      return {
+        userId: id,
+        name: user ? `${user.first_name} ${user.last_name}` : 'Unknown User',
+      };
+    });
+
+    req.apiResponse = {
+      success: true,
+      message: 'User contacts retrieved successfully',
+      data: contacts,
+    };
+    next();
+  } catch (err) {
+    next(err);
+  }
+};

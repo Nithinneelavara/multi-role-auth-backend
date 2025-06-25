@@ -1,14 +1,15 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IMessage extends Document {
-  messageType: 'admin' | 'user'; // Who sent the message
+  messageType: 'admin' | 'user';
   senderId: mongoose.Types.ObjectId;
-  senderModel: 'User' | 'Admin'; // Add this to support both references
-  receiverId?: mongoose.Types.ObjectId; // For user-to-user
-  groupId?: mongoose.Types.ObjectId;    // For group messages
+  senderModel: 'User' | 'Admin';
+  receiverId?: mongoose.Types.ObjectId;
+  groupId?: mongoose.Types.ObjectId;
   groupName?: string;
   message: string;
   timestamp: Date;
+  isRead?: boolean; 
 }
 
 const messageSchema = new Schema<IMessage>(
@@ -21,16 +22,16 @@ const messageSchema = new Schema<IMessage>(
     senderId: {
       type: Schema.Types.ObjectId,
       required: true,
-      refPath: 'senderModel', // Dynamically reference either 'User' or 'Admin'
+      refPath: 'senderModel',
     },
     senderModel: {
       type: String,
       required: true,
-      enum: ['User', 'Admin'], // Must match model names
+      enum: ['User', 'Admin'],
     },
     receiverId: {
       type: Schema.Types.ObjectId,
-      ref: 'User', // Only used for user-to-user messages
+      ref: 'User',
     },
     groupId: {
       type: Schema.Types.ObjectId,
@@ -47,7 +48,11 @@ const messageSchema = new Schema<IMessage>(
       type: Date,
       default: Date.now,
     },
-  },
+    isRead: {
+      type: Boolean,
+      default: false, 
+    },
+  }
 );
 
 export default mongoose.model<IMessage>('Message', messageSchema);
