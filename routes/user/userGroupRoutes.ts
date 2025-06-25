@@ -2,7 +2,11 @@ import express from 'express';
 import {
   getAvailableGroups,
   sendJoinRequest,
-  getApprovedGroupsForUser
+  getApprovedGroupsForUser,
+  getMyGroupMessages,
+  sendUserMessage,
+  getUserChatHistory,
+  getMyContacts
 } from '../../controllers/user/userGroup';
 import passport from '../../middleware/passport';
 import { entryLogger } from '../../middleware/entrypoint';
@@ -115,5 +119,209 @@ router.post('/groups/join', entryLogger, protectUser, sendJoinRequest, exitLogge
  *                         type: string
  */
 router.get('/groups/approved', entryLogger,  protectUser, getApprovedGroupsForUser, exitLogger);
+
+/**
+ * @swagger
+ * /api/member/groups/messages:
+ *   get:
+ *     summary: Get messages from groups the user is approved in (optional group filter)
+ *     tags: [User - Groups]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: groupId
+ *         schema:
+ *           type: string
+ *         required: false
+ *         description: Optional group ID to filter messages for a specific group
+ *     responses:
+ *       200:
+ *         description: List of group messages
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Group messages fetched successfully
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       groupName:
+ *                         type: string
+ *                         example: PowerHouse
+ *                       notifications:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             message:
+ *                               type: string
+ *                               example: Welcome to the group!
+ *                             timestamp:
+ *                               type: string
+ *                               format: date-time
+ *                               example: "2025-06-21T10:15:30.000Z"
+ */
+
+router.get('/groups/messages', entryLogger, protectUser, getMyGroupMessages, exitLogger);
+
+/**
+ * @swagger
+ * /api/member/messages:
+ *   post:
+ *     summary: Send a message to another user
+ *     tags: [User - Groups]
+ *     security:
+ *       - bearerAuth: []         
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [receiverId, message]
+ *             properties:
+ *               receiverId:
+ *                 type: string
+ *                 example: 684d4169fda2f7406c7c4969
+ *               message:
+ *                 type: string
+ *                 example: Hello!
+ *     responses:
+ *       200:
+ *         description: Message sent successfully
+ */
+
+router.post('/messages', entryLogger, protectUser, sendUserMessage, exitLogger);
+
+/**
+ * @swagger
+ * /api/member/messages:
+ *   get:
+ *     summary: Get chat history with a specific user
+ *     tags: [User - Groups]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID of the user to get chat history with
+ *     responses:
+ *       200:
+ *         description: Chat history with the specified user
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Chat history with user 64f9c182b5e74a001f77cabc
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       message:
+ *                         type: string
+ *                         example: "Hey, how are you?"
+ *                       timestamp:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2025-06-24T10:15:30.000Z"
+ *                       direction:
+ *                         type: string
+ *                         enum: [sent, received]
+ *                         example: "sent"
+ *                       isRead:
+ *                         type: boolean
+ *                         example: true
+ *       400:
+ *         description: Missing userId query parameter
+ *       401:
+ *         description: Unauthorized. Missing or invalid bearer token.
+ *       500:
+ *         description: Internal server error
+ */
+
+
+router.get('/messages', entryLogger, protectUser, getUserChatHistory, exitLogger);
+
+
+/**
+ * @swagger
+ * /api/member/messages/contacts:
+ *   get:
+ *     summary: Get list of users the current user has chatted with or view chat with a specific user
+ *     tags: [User - Groups]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         required: false
+ *         description: Optional user ID to fetch chat history with a specific user
+ *     responses:
+ *       200:
+ *         description: List of user contacts or chat history with a specific user
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: User contacts retrieved successfully
+ *                 data:
+ *                   oneOf:
+ *                     - type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           userId:
+ *                             type: string
+ *                             example: "64f12345a1b2c3d4e5f67890"
+ *                           name:
+ *                             type: string
+ *                             example: "John Doe"
+ *                     - type: object
+ *                       additionalProperties:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             message:
+ *                               type: string
+ *                               example: "Hey!"
+ *                             timestamp:
+ *                               type: string
+ *                               format: date-time
+ *                             direction:
+ *                               type: string
+ *                               enum: [sent, received]
+ *                               example: "sent"
+ */
+
+router.get('/messages/contacts', entryLogger, protectUser, getMyContacts, exitLogger);
+
 
 export default router;

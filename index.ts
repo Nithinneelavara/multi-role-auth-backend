@@ -34,8 +34,10 @@ app.use(passport.initialize());
 
 // Routes
 app.use('/api/admin', adminRoutes);
+
 app.use('/api/users', userRoutes);
 app.use('/api/auth',userAuthRoutes );
+
 app.use('/api/members', memberRoutes);
 app.use('/api/members', memberAuthRoutes);
 app.use("/api/notification", notificationRoutes);
@@ -62,15 +64,6 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 const server = http.createServer(app); // Create HTTP server
 initSocket(server); // Initialize Socket.IO with the HTTP server
 
-
-// connectDB().then(async() => {
-
-//   await seedAdminUser(); // Seed admin user if not exists)
-//   app.listen(PORT, () => {
-//     console.log(`Server running on http://localhost:${PORT}`);
-//     console.log(`Swagger docs at http://localhost:${PORT}/api-docs`);
-//   });
-// });
 connectDB().then(async() => {
   await seedAdminUser(); // Seed admin user if not exists
   server.listen(PORT, () => { // <-- Use server.listen, not app.listen

@@ -1,5 +1,5 @@
 import express from 'express';
-import { memberLogin, memberLogout } from '../../controllers/admin/memberAuth';
+import { memberLogin, memberLogout, memberForgotPassword, memberResetPassword, } from '../../controllers/admin/memberAuth';
 import { refreshMemberToken } from '../../controllers/admin/refreshMemberToken';
 import { LoginValidation } from '../../validators/loginValidator';
 import { validateRequest } from '../../middleware/validateRequest';
@@ -140,5 +140,63 @@ router.post('/logout', entryLogger, memberLogout, exitLogger);
  *         description: Invalid or expired refresh token
  */
 router.post('/refresh-token',entryLogger, refreshMemberToken, exitLogger);
+
+/**
+ * @swagger
+ * /api/members/forgot-password:
+ *   post:
+ *     summary: Send OTP to member email for password reset
+ *     tags: [MemberAuth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: member@example.com
+ *     responses:
+ *       200:
+ *         description: If the email exists, an OTP has been sent.
+ */
+router.post('/forgot-password', entryLogger, memberForgotPassword, exitLogger);
+
+/**
+ * @swagger
+ * /api/members/reset-password:
+ *   post:
+ *     summary: Reset member password using OTP
+ *     tags: [MemberAuth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - otp
+ *               - newPassword
+ *             properties:
+ *               email:
+ *                 type: string
+ *               otp:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *                 example: newSecurePass123
+ *     responses:
+ *       200:
+ *         description: Password reset successful
+ *       400:
+ *         description: Invalid input or expired OTP
+ *       404:
+ *         description: Member not found
+ */
+router.post('/reset-password', entryLogger, memberResetPassword, exitLogger);
 
 export default router;

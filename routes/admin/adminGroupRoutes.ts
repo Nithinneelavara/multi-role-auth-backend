@@ -10,6 +10,7 @@ import {
   deleteGroup
 } from '../../controllers/admin/adminGroup';
 import passport from '../../middleware/passport';
+import { notifyGroupMembersViaSocket, getGroupNotifications, notifySpecificGroup } from '../../controllers/admin/groupNotificationController';
 
 const router = express.Router();
 
@@ -247,5 +248,138 @@ router.put('/groups/:groupId', entryLogger, protectAdmin, updateGroup, exitLogge
  *         description: Group not found or unauthorized
  */
 router.delete('/groups/:groupId', entryLogger, protectAdmin, deleteGroup, exitLogger);
+
+/**
+ * @swagger
+ * /api/admin/groups/notify:
+ *   post:
+ *     summary: Notify all approved members in groups via socket
+ *     tags: [Admin - Groups]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               message:
+ *                 type: string
+ *                 description: Notification message to send to group members
+ *     responses:
+ *       200:
+ *         description: Notification sent successfully
+ *       400:
+ *         description: Invalid notification message
+ */
+
+router.post('/groups/notify', entryLogger, protectAdmin, notifyGroupMembersViaSocket, exitLogger);
+
+/**
+ * @swagger
+ * /api/admin/groups/{groupId}/notify:
+ *   post:
+ *     summary: Send a notification to a specific group (approved members only)
+ *     tags: [Admin - Groups]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: groupId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID of the group
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - message
+ *             properties:
+ *               message:
+ *                 type: string
+ *                 example: "Team meeting at 3 PM"
+ *     responses:
+ *       200:
+ *         description: Notification sent successfully
+ *       400:
+ *         description: Missing parameters or invalid group
+ *       500:
+ *         description: Server error
+ */
+
+router.post('/groups/:groupId/notify', entryLogger, protectAdmin, notifySpecificGroup , exitLogger);
+
+/**
+ * @swagger
+ * /api/admin/groups/notifications:
+ *   get:
+ *     summary: Get all group notifications sent by the admin
+ *     tags: [Admin - Groups]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: groupId
+ *         schema:
+ *           type: string
+ *         required: false
+ *         description: (Optional) Filter notifications by group ID
+ *     responses:
+ *       200:
+ *         description: List of group notifications
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Group notifications fetched.
+ *                 totalMessagesSentByAdmin:
+ *                   type: integer
+ *                   example: 12
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       groupId:
+ *                         type: string
+ *                         example: 60d0fe4f5311236168a109ca
+ *                       groupName:
+ *                         type: string
+ *                         example: Alpha Group
+ *                       totalMessages:
+ *                         type: integer
+ *                         example: 5
+ *                       notifications:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             message:
+ *                               type: string
+ *                               example: Important update for all members.
+ *                             timestamp:
+ *                               type: string
+ *                               format: date-time
+ *                               example: 2025-06-23T10:30:00.000Z
+ *       400:
+ *         description: Invalid groupId
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
+ */
+
+router.get('/groups/notifications', entryLogger, protectAdmin, getGroupNotifications, exitLogger);
 
 export default router;

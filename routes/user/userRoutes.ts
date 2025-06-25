@@ -4,7 +4,6 @@ import { entryLogger } from '../../middleware/entrypoint';
 import { exitLogger } from '../../middleware/exitpoint';
 import { userValidationRules } from '../../validators/userValidator';
 import { validateRequest } from '../../middleware/validateRequest';
-import userGroupRoutes from './userGroupRoutes';
 
 
 import {

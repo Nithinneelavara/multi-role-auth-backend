@@ -1,11 +1,10 @@
-// models/db/group.ts
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IGroup extends Document {
   groupName: string;
   maxUsers: number;
-  members: mongoose.Types.ObjectId[]; // User IDs
-  createdBy: mongoose.Types.ObjectId; // Admin ID
+  members: mongoose.Types.ObjectId[];
+  createdBy: mongoose.Types.ObjectId;
 }
 
 const groupSchema = new Schema<IGroup>(

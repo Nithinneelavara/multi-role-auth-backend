@@ -5,6 +5,8 @@ import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import AccessToken from '../../models/db/accessToken';
 import RefreshToken from '../../models/db/refreshToken';
+import OtpToken from '../../models/db/otpToken';
+import { sendOtpEmail } from '../../services/Email/nodemailer';
 
 dotenv.config();
 
@@ -113,5 +115,84 @@ export const memberLogout = async (req: Request, res: Response): Promise<void> =
       success: false,
       message: 'Error during logout',
     });
+  }
+};
+
+// ------------------ FORGOT PASSWORD ------------------
+
+export const memberForgotPassword = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+
+    // Step 1: Check if member exists
+    const member = await Member.findOne({ email });
+
+    if (!member) {
+      return res.status(404).json({
+        success: false,
+        message: 'Email does not exist in our records.',
+      });
+    }
+
+    // Step 2: Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Step 3: Store OTP in DB
+    await OtpToken.findOneAndUpdate(
+      { email },
+      { email, otp, expiresAt },
+      { upsert: true, new: true }
+    );
+
+    // Step 4: Send OTP via email
+    await sendOtpEmail(email, otp);
+
+    // Step 5: Send response
+    res.status(200).json({
+      success: true,
+      message: 'OTP sent successfully to the registered email.',
+    });
+
+  } catch (error) {
+    console.error('Error in memberForgotPassword:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// ------------------ RESET PASSWORD ------------------
+
+export const memberResetPassword = async (req: Request, res: Response) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email, OTP, and new password are required.',
+      });
+    }
+
+    const otpEntry = await OtpToken.findOne({ email, otp });
+
+    if (!otpEntry || otpEntry.expiresAt < new Date()) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired OTP.' });
+    }
+
+    const member = await Member.findOne({ email });
+    if (!member) {
+      return res.status(404).json({ success: false, message: 'Member not found.' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    member.password = hashedPassword;
+    await member.save();
+
+    await OtpToken.deleteOne({ email });
+
+    res.status(200).json({ success: true, message: 'Password has been reset successfully.' });
+  } catch (error) {
+    console.error('Error in memberResetPassword:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };

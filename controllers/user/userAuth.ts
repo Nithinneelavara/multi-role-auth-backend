@@ -7,6 +7,9 @@ import User from '../../models/db/user';
 import AccessToken from '../../models/db/accessToken';
 import RefreshToken from '../../models/db/refreshToken'; 
 
+import OtpToken from '../../models/db/otpToken';
+import { sendOtpEmail } from '../../services/Email/nodemailer';
+
 dotenv.config();
 const JWT_SECRET = process.env.JWT_SECRET!;
 if (!JWT_SECRET) throw new Error('JWT_SECRET is not defined');
@@ -138,6 +141,87 @@ export const getUserData = async (req: Request, res: Response): Promise<void> =>
       data: userData,
     });
   } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// ------------------ FORGOT PASSWORD ------------------
+
+export const forgotPassword = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+
+    // Step 1: Check if user exists
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Email does not exist in our records.',
+      });
+    }
+
+    // Step 2: Generate OTP and expiry
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Step 3: Upsert OTP
+    await OtpToken.findOneAndUpdate(
+      { email },
+      { email, otp, expiresAt },
+      { upsert: true, new: true }
+    );
+
+    // Step 4: Send OTP
+    await sendOtpEmail(email, otp);
+
+    res.status(200).json({
+      success: true,
+      message: 'OTP sent successfully to the registered email.',
+    });
+
+  } catch (error) {
+    console.error('Error in forgotPassword:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+export const resetPassword = async (req: Request, res: Response) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email, OTP, and new password are required.',
+      });
+    }
+
+    // Lookup OTP (plain match)
+    const otpEntry = await OtpToken.findOne({ email, otp });
+
+    if (!otpEntry) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired OTP.' });
+    }
+
+    if (otpEntry.expiresAt < new Date()) {
+      return res.status(400).json({ success: false, message: 'OTP has expired.' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    await user.save();
+
+    await OtpToken.deleteOne({ email }); // Cleanup OTP
+
+    res.status(200).json({ success: true, message: 'Password has been reset successfully.' });
+  } catch (error) {
+    console.error('Error in resetPassword:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };

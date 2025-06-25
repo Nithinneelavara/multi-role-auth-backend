@@ -39,15 +39,19 @@ export const getAllGroupsWithUsers = async (req: Request, res: Response, next: N
   try {
     const adminId = getUserId(req);
 
-    const groups = await Group.find({ createdBy: adminId })
-      .populate('members', 'userName email')
-      .exec();
+    const groups = await Group.find({
+  createdBy: adminId,
+  members: { $exists: true, $not: { $size: 0 } },
+})
+  .select('-notifications') // ✅ Exclude notifications field
+  .populate('members', 'userName email')
+  .exec();
 
     req.apiResponse = {
       success: true,
       message: groups.length > 0
-        ? 'Groups fetched successfully'
-        : 'No groups created yet',
+        ? 'Groups with members fetched successfully'
+        : 'No groups with members found',
       data: groups,
     };
     next();
@@ -55,6 +59,7 @@ export const getAllGroupsWithUsers = async (req: Request, res: Response, next: N
     next(error);
   }
 };
+
 
 // ------------------ GET ALL JOIN REQUESTS ------------------
 export const getJoinRequests = async (req: Request, res: Response, next: NextFunction) => {
@@ -167,6 +172,7 @@ export const updateGroup = async (req: Request, res: Response, next: NextFunctio
     }
 
     req.apiResponse = {
+    
       success: true,
       message: 'Group updated successfully',
       data: updatedGroup,
