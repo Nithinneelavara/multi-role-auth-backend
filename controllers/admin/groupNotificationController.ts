@@ -7,6 +7,9 @@ import mongoose from 'mongoose';
 import { parseStandardQueryParams as parseQueryParams, buildSearchFilterQuery, buildProjection, getPagination,} from '../../controllers/generic/utils';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
+import { encrypt } from '../../utils/encryption';
+import { decrypt } from '../../utils/encryption'; 
+
 dayjs.extend(utc);
 
 // Helper to safely extract user ID from request
@@ -73,14 +76,19 @@ export const notifyGroupMembersViaSocket = async (
         'group'
       );
 
+      // ✅ Encrypt the message before saving
+      const { encryptedData, iv } = encrypt(message);
+
       await GroupMessage.create({
         messageType: 'admin',
         senderId: adminId,
         senderModel: 'Admin',
         groupId: group._id,
         groupName: group.groupName,
-        message,
+        message: encryptedData,
+        iv,
         timestamp: new Date(),
+        isSent: true,
       });
 
       totalNotified += approvedMembers.length;
@@ -106,7 +114,7 @@ export const notifySpecificGroup = async (
   try {
     const adminId = getUserId(req);
     const groupId = req.params.groupId;
-    const { message, fileName ,scheduledTime } = req.body;
+    const { message, fileName, scheduledTime } = req.body;
 
     if (!groupId || (!message && !fileName)) {
       req.apiResponse = {
@@ -130,7 +138,7 @@ export const notifySpecificGroup = async (
     const notificationPayload = {
       groupId: group._id,
       groupName: group.groupName,
-      file: fileName ? generateS3Url(fileName) : '', // ✅ use full URL in notification
+      file: fileName ? generateS3Url(fileName) : '',
     };
 
     approvedMembers.forEach((user) => {
@@ -149,18 +157,22 @@ export const notifySpecificGroup = async (
       'group'
     );
 
-    // ✅ Save only fileName in DB
+    // ✅ Encrypt the message if provided
+    const encryptedResult = message ? encrypt(message) : null;
+
+    // ✅ Save to DB
     await GroupMessage.create({
       messageType: 'admin',
       senderId: adminId,
       senderModel: 'Admin',
       groupId: group._id,
       groupName: group.groupName,
-      message: message || '',
-      file: fileName || '', // ✅ only store filename
+      message: encryptedResult?.encryptedData || '',
+      iv: encryptedResult?.iv || '',
+      file: fileName || '',
       timestamp: new Date(),
       scheduledTime: scheduledTime ? new Date(scheduledTime) : null,
-      isSent: scheduledTime ? false : true, // if scheduled, mark as unsent
+      isSent: scheduledTime ? false : true,
     });
 
     req.apiResponse = {
@@ -170,11 +182,10 @@ export const notifySpecificGroup = async (
     next();
   } catch (error) {
     next(error);
-  }
+  }
 };
 
 // Retrieve all group notifications sent by the admin
-
 export const getGroupNotifications = async (
   req: Request,
   res: Response,
@@ -183,7 +194,6 @@ export const getGroupNotifications = async (
   try {
     const adminId = getUserId(req);
 
-    // ✅ Parse input from standardized request body
     const {
       page,
       limit,
@@ -195,7 +205,6 @@ export const getGroupNotifications = async (
 
     const { skip } = getPagination(page, limit);
 
-    // ✅ Construct MongoDB query filter
     const dbFilter: any = {
       senderId: adminId,
       ...filter,
@@ -207,22 +216,20 @@ export const getGroupNotifications = async (
       dbFilter.groupId = new mongoose.Types.ObjectId(groupId);
     }
 
-    // ✅ Clean and validate projection
     const { projection: cleanProjection, mode } = buildProjection(projection);
     if (mode === 'invalid') {
       throw new Error('Projection cannot mix inclusion and exclusion.');
     }
 
-    // ✅ Ensure required fields are included if using inclusion
     if (mode !== 'exclude') {
       cleanProjection.groupId = 1;
       cleanProjection.groupName = 1;
       cleanProjection.message = 1;
+      cleanProjection.iv = 1; // ✅ Required for decryption
       cleanProjection.timestamp = 1;
       cleanProjection.file = 1;
     }
 
-    // ✅ DB Query
     const totalCount = await GroupMessage.countDocuments(dbFilter);
     const messages = await GroupMessage.find(dbFilter, cleanProjection)
       .sort({ timestamp: -1 })
@@ -230,7 +237,7 @@ export const getGroupNotifications = async (
       .limit(limit)
       .lean();
 
-    // ✅ Group notifications by groupId
+    // ✅ Group and decrypt messages
     const grouped = messages.reduce((acc: any, msg) => {
       const id = msg.groupId?.toString();
       if (!id) return acc;
@@ -244,11 +251,20 @@ export const getGroupNotifications = async (
         };
       }
 
+      let decryptedMessage = '🔐 Unable to decrypt';
+      try {
+        if (msg.message && msg.iv) {
+          decryptedMessage = decrypt(msg.message, msg.iv);
+        }
+      } catch (_) {
+        // silently fail
+      }
+
       acc[id].totalMessages++;
       acc[id].notifications.push({
-        ...(msg.message && { message: msg.message }),
-        ...(msg.timestamp && { timestamp: msg.timestamp }),
-        file: msg.file ? generateS3Url(msg.file) : '',
+        message: decryptedMessage,
+        timestamp: msg.timestamp,
+        file: msg.file ? generateS3Url(msg.file) : '',
       });
 
       return acc;
@@ -256,7 +272,6 @@ export const getGroupNotifications = async (
 
     const result = Object.values(grouped);
 
-    // ✅ Set standardized response
     req.apiResponse = {
       success: true,
       message:
