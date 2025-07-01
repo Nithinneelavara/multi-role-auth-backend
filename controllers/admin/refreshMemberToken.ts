@@ -10,7 +10,6 @@ const JWT_SECRET = process.env.JWT_SECRET!;
 if (!JWT_SECRET) {
   throw new Error('JWT_SECRET is not defined');
 }
-
 export const refreshMemberToken = async (
   req: Request,
   res: Response,
@@ -23,14 +22,11 @@ export const refreshMemberToken = async (
       res.status(401).json({ success: false, message: 'Refresh token missing' });
       return;
     }
-
-    //  Verify refresh token
     jwt.verify(refreshToken, JWT_SECRET, async (err: any, decoded: any) => {
       if (err || !decoded?.id) {
         return res.status(403).json({ success: false, message: 'Invalid or expired refresh token' });
       }
 
-      //  Check if refresh token exists in DB
       const storedRefresh = await RefreshToken.findOne({
         userId: decoded.id,
         token: refreshToken,
@@ -41,7 +37,6 @@ export const refreshMemberToken = async (
         return res.status(403).json({ success: false, message: 'Refresh token not found or revoked' });
       }
 
-      //  Issue new access token
       const newAccessToken = jwt.sign({ id: decoded.id, role: 'member' }, JWT_SECRET, { expiresIn: '1d' });
 
       await AccessToken.findOneAndUpdate(
@@ -53,7 +48,6 @@ export const refreshMemberToken = async (
         { upsert: true, new: true }
       );
 
-      //  Set new access token in cookie
       res.cookie('memberToken', newAccessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',

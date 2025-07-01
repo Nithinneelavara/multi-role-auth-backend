@@ -25,41 +25,32 @@ export const adminLogin = async (
 ): Promise<void> => {
   try {
     const { email, password } = req.body;
-
     const admin = await Admin.findOne({ email });
     if (!admin) {
       res.status(401).json({ success: false, message: 'Invalid email or password' });
       return;
     }
-
     const isMatch = await bcrypt.compare(password, admin.password);
     if (!isMatch) {
       res.status(401).json({ success: false, message: 'Invalid email or password' });
       return;
     }
-
     const accessToken = jwt.sign({ id: admin._id, role: 'admin' }, JWT_SECRET, { expiresIn: '1d' });
     const refreshToken = jwt.sign({ id: admin._id }, JWT_SECRET, { expiresIn: '30d' });
-
-    // Optional: Remove old tokens
     await AccessToken.deleteMany({ userId: admin._id, userType: 'admin' });
     await RefreshToken.deleteMany({ userId: admin._id, userType: 'admin' });
-
-    // Save to unified collections
     await AccessToken.create({
       userId: admin._id,
       userType: 'admin',
       token: accessToken,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 1 day
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
-
     await RefreshToken.create({
       userId: admin._id,
       userType: 'admin',
       token: refreshToken,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     });
-
     res
       .cookie('adminToken', accessToken, {
         httpOnly: true,
@@ -90,27 +81,22 @@ export const adminLogout = async (req: Request, res: Response): Promise<void> =>
   try {
     const accessToken = req.cookies.adminToken;
     const refreshToken = req.cookies.refreshToken;
-
     if (!accessToken || !refreshToken) {
       res.status(401).json({ success: false, message: 'Tokens missing' });
       return;
     }
-
     await AccessToken.deleteOne({ token: accessToken });
     await RefreshToken.deleteOne({ token: refreshToken });
-
     res.clearCookie('adminToken', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
     });
-
     res.clearCookie('refreshToken', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
     });
-
     res.status(200).json({
       success: true,
       message: 'Admin logged out successfully. Tokens cleared.',
@@ -123,7 +109,6 @@ export const adminLogout = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-
 export const getAdminStats = async (
   req: Request,
   res: Response,
@@ -135,17 +120,13 @@ export const getAdminStats = async (
       Member.countDocuments(),
       Group.countDocuments(),
     ]);
-
     const oneMonthAgo = new Date();
     oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
-
     const activeUserIds = await Message.distinct('senderId', {
       timestamp: { $gte: oneMonthAgo },
-      senderModel: 'User', // Only count user-sent messages
+      senderModel: 'User',
     });
-
     const activeUsersCount = activeUserIds.length;
-
     res.status(200).json({
       success: true,
       data: {

@@ -1,12 +1,11 @@
+//controllers\user\userAuth.ts
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
-
 import User from '../../models/db/user';
 import AccessToken from '../../models/db/accessToken';
-import RefreshToken from '../../models/db/refreshToken'; 
-
+import RefreshToken from '../../models/db/refreshToken';
 import OtpToken from '../../models/db/otpToken';
 import { sendOtpEmail } from '../../services/Email/nodemailer';
 
@@ -37,21 +36,18 @@ export const userLogin = async (req: Request, res: Response, next: NextFunction)
     const accessExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 1 day
     const refreshExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
-    //  Save Access Token
     await AccessToken.findOneAndUpdate(
       { userId: user._id, userType: 'user' },
       { token: accessToken, expiresAt: accessExpiresAt },
       { upsert: true, new: true }
     );
 
-    // Save Refresh Token
     await RefreshToken.findOneAndUpdate(
       { userId: user._id, userType: 'user' },
       { token: refreshToken, expiresAt: refreshExpiresAt },
       { upsert: true, new: true }
     );
 
-    //  Set Cookies
     res
       .cookie('userToken', accessToken, {
         httpOnly: true,
@@ -89,11 +85,9 @@ export const userLogout = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    //  Delete Access & Refresh Tokens
     await AccessToken.deleteOne({ token: accessToken, userType: 'user' });
     await RefreshToken.deleteOne({ token: refreshToken, userType: 'user' });
 
-    //  Clear Cookies
     res.clearCookie('userToken', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -146,12 +140,9 @@ export const getUserData = async (req: Request, res: Response): Promise<void> =>
 };
 
 // ------------------ FORGOT PASSWORD ------------------
-
 export const forgotPassword = async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
-
-    // Step 1: Check if user exists
     const user = await User.findOne({ email });
 
     if (!user) {

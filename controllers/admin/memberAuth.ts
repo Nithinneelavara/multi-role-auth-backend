@@ -14,7 +14,6 @@ const JWT_SECRET = process.env.JWT_SECRET!;
 if (!JWT_SECRET) throw new Error('JWT_SECRET is not defined in .env');
 
 // ------------------ LOGIN ------------------
-
 export const memberLogin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { email, password } = req.body;
@@ -31,14 +30,12 @@ export const memberLogin = async (req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    // Create tokens
     const accessToken = jwt.sign({ id: member._id, role: 'member' }, JWT_SECRET, { expiresIn: '1d' });
     const refreshToken = jwt.sign({ id: member._id }, JWT_SECRET, { expiresIn: '30d' });
 
     const expiresAtAccess = new Date(Date.now() + 24 * 60 * 60 * 1000);  // 1 day
     const expiresAtRefresh = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
-
-    // Store tokens in shared collections
+    
     await AccessToken.findOneAndUpdate(
       { userId: member._id, userType: 'member' },
       { token: accessToken, expiresAt: expiresAtAccess },
@@ -51,7 +48,6 @@ export const memberLogin = async (req: Request, res: Response, next: NextFunctio
       { upsert: true, new: true }
     );
 
-    // Send cookies and response
     res
       .cookie('memberToken', accessToken, {
         httpOnly: true,
@@ -79,7 +75,6 @@ export const memberLogin = async (req: Request, res: Response, next: NextFunctio
 };
 
 // ------------------ LOGOUT ------------------
-
 export const memberLogout = async (req: Request, res: Response): Promise<void> => {
   try {
     const accessToken = req.cookies.memberToken;
@@ -90,7 +85,6 @@ export const memberLogout = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    // Delete both tokens from shared collections
     await AccessToken.deleteOne({ token: accessToken });
     await RefreshToken.deleteOne({ token: refreshToken });
 
@@ -119,7 +113,6 @@ export const memberLogout = async (req: Request, res: Response): Promise<void> =
 };
 
 // ------------------ FORGOT PASSWORD ------------------
-
 export const memberForgotPassword = async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
@@ -161,7 +154,6 @@ export const memberForgotPassword = async (req: Request, res: Response) => {
 };
 
 // ------------------ RESET PASSWORD ------------------
-
 export const memberResetPassword = async (req: Request, res: Response) => {
   try {
     const { email, otp, newPassword } = req.body;

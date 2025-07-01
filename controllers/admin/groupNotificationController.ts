@@ -49,7 +49,6 @@ export const notifyGroupMembersViaSocket = async (
       };
       return next();
     }
-
     let totalNotified = 0;
 
     for (const group of groups) {
@@ -85,7 +84,6 @@ export const notifyGroupMembersViaSocket = async (
 
       totalNotified += approvedMembers.length;
     }
-
     req.apiResponse = {
       success: true,
       message: `Socket notification sent to ${totalNotified} approved users.`,
@@ -97,7 +95,6 @@ export const notifyGroupMembersViaSocket = async (
 };
 
 // Send notification to a specific group
-
 export const notifySpecificGroup = async (
   req: Request,
   res: Response,
@@ -149,7 +146,6 @@ export const notifySpecificGroup = async (
       'group'
     );
 
-    // ✅ Save only fileName in DB
     await GroupMessage.create({
       messageType: 'admin',
       senderId: adminId,
@@ -157,10 +153,10 @@ export const notifySpecificGroup = async (
       groupId: group._id,
       groupName: group.groupName,
       message: message || '',
-      file: fileName || '', // ✅ only store filename
+      file: fileName || '',
       timestamp: new Date(),
       scheduledTime: scheduledTime ? new Date(scheduledTime) : null,
-      isSent: scheduledTime ? false : true, // if scheduled, mark as unsent
+      isSent: scheduledTime ? false : true,
     });
 
     req.apiResponse = {
@@ -174,7 +170,6 @@ export const notifySpecificGroup = async (
 };
 
 // Retrieve all group notifications sent by the admin
-
 export const getGroupNotifications = async (
   req: Request,
   res: Response,
@@ -183,7 +178,6 @@ export const getGroupNotifications = async (
   try {
     const adminId = getUserId(req);
 
-    // ✅ Parse input from standardized request body
     const {
       page,
       limit,
@@ -195,7 +189,6 @@ export const getGroupNotifications = async (
 
     const { skip } = getPagination(page, limit);
 
-    // ✅ Construct MongoDB query filter
     const dbFilter: any = {
       senderId: adminId,
       ...filter,
@@ -207,13 +200,11 @@ export const getGroupNotifications = async (
       dbFilter.groupId = new mongoose.Types.ObjectId(groupId);
     }
 
-    // ✅ Clean and validate projection
     const { projection: cleanProjection, mode } = buildProjection(projection);
     if (mode === 'invalid') {
       throw new Error('Projection cannot mix inclusion and exclusion.');
     }
 
-    // ✅ Ensure required fields are included if using inclusion
     if (mode !== 'exclude') {
       cleanProjection.groupId = 1;
       cleanProjection.groupName = 1;
@@ -222,7 +213,6 @@ export const getGroupNotifications = async (
       cleanProjection.file = 1;
     }
 
-    // ✅ DB Query
     const totalCount = await GroupMessage.countDocuments(dbFilter);
     const messages = await GroupMessage.find(dbFilter, cleanProjection)
       .sort({ timestamp: -1 })
@@ -230,7 +220,6 @@ export const getGroupNotifications = async (
       .limit(limit)
       .lean();
 
-    // ✅ Group notifications by groupId
     const grouped = messages.reduce((acc: any, msg) => {
       const id = msg.groupId?.toString();
       if (!id) return acc;
@@ -256,7 +245,7 @@ export const getGroupNotifications = async (
 
     const result = Object.values(grouped);
 
-    // ✅ Set standardized response
+    
     req.apiResponse = {
       success: true,
       message:

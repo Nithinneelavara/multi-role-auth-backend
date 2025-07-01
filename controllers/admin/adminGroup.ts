@@ -20,11 +20,7 @@ export const createGroup = async (
   try {
     let { groupName, maxUsers } = req.body;
     const adminId = getUserId(req);
-
-    // Normalize group name
     groupName = groupName.trim().toLowerCase();
-
-    // 🔍 Check if a group with the same name already exists
     const existingGroup = await Group.findOne({ groupName });
     if (existingGroup) {
       return res.status(400).json({
@@ -32,15 +28,12 @@ export const createGroup = async (
         message: "Group with the same name already exists in the database.",
       });
     }
-
-    // ✅ Create new group
     const group = await Group.create({
       groupName,
       maxUsers,
       members: [],
       createdBy: adminId,
     });
-
     req.apiResponse = {
       success: true,
       message: "Group created successfully",
@@ -48,7 +41,6 @@ export const createGroup = async (
     };
     next();
   } catch (error: any) {
-    // Optional: Catch duplicate key error (backup safeguard)
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
@@ -60,10 +52,7 @@ export const createGroup = async (
   }
 };
 
-
 // ------------------ GET ALL GROUPS (WITH MEMBERS) ------------------
-
-
 export const getAllGroupsWithUsers = async (
   req: Request,
   res: Response,
@@ -72,30 +61,21 @@ export const getAllGroupsWithUsers = async (
   try {
     const adminId = getUserId(req);
     const { search, filter = {}, pagination = {}, projection = {} } = req.body;
-
-    // ✅ Base MongoDB query
     const baseQuery: any = {
       createdBy: adminId,
       members: { $exists: true, $not: { $size: 0 } },
       ...filter,
       ...(search ? buildSearchFilterQuery(['groupName'], search) : {})
     };
-
-    // ✅ Pagination
     const { page = 1, limit = 10 } = pagination;
     const { skip } = getPagination(page, limit);
-
-    // ✅ Projection Analysis
     const { projection: cleanProjection, mode }: {
       projection: Record<string, 1 | 0>,
       mode: ProjectionMode
     } = buildProjection(projection);
-
     if (mode === 'invalid') {
       throw new Error('Projection cannot mix inclusion and exclusion.');
     }
-
-    // ✅ Split projection into group and member fields
     const groupProjection: Record<string, 1 | 0> = {};
     const memberProjection: Record<string, 1 | 0> = {};
 
@@ -107,29 +87,21 @@ export const getAllGroupsWithUsers = async (
         groupProjection[key] = cleanProjection[key];
       }
     }
-
-    // ✅ Ensure notifications are always excluded
     if (mode === 'include') {
       delete groupProjection.notifications;
     } else {
       groupProjection.notifications = 0;
     }
-
-    // ✅ Default member projection fallback
     if (Object.keys(memberProjection).length === 0) {
       memberProjection.userName = 1;
       memberProjection.email = 1;
     }
-
-    // ✅ Query and populate
     const totalCount = await Group.countDocuments(baseQuery);
     const groups = await Group.find(baseQuery, groupProjection)
       .populate('members', memberProjection)
       .skip(skip)
       .limit(limit)
       .lean();
-
-    // ✅ Final API response
     req.apiResponse = {
       success: true,
       message: groups.length > 0
@@ -142,13 +114,11 @@ export const getAllGroupsWithUsers = async (
         groups
       }
     };
-
     next();
   } catch (error) {
     next(error);
   }
 };
-
 // ------------------ GET ALL JOIN REQUESTS ------------------
 export const getJoinRequests = async (
   req: Request,
@@ -158,37 +128,27 @@ export const getJoinRequests = async (
   try {
     const adminId = getUserId(req);
     const { search, filter = {}, pagination = {}, projection = {} } = req.body;
-
-    // ✅ Get group IDs created by this admin
+    //  Get group IDs created by this admin
     const groups = await Group.find({ createdBy: adminId }, '_id');
     const groupIds = groups.map(group => group._id);
-
-    // ✅ Build query
     const baseQuery: any = {
       groupId: { $in: groupIds },
       status: 'pending',
       ...filter,
       ...(search ? buildSearchFilterQuery(['requestMessage'], search) : {}),
     };
-
-    // ✅ Pagination
     const { page = 1, limit = 10 } = pagination;
     const { skip } = getPagination(page, limit);
-
-    // ✅ Projection
     const { projection: cleanProjection, mode } = buildProjection(projection);
     if (mode === 'invalid') {
       throw new Error('Projection cannot mix inclusion and exclusion.');
     }
-
-    // ✅ Map flat projection to correct populate paths
     const userProjectionFields: string[] = [];
     const groupProjectionFields: string[] = [];
     const rootProjection: Record<string, 1 | 0> = {};
 
     Object.keys(cleanProjection).forEach((field) => {
       const value = cleanProjection[field];
-
       if (field === 'userName') userProjectionFields.push('userName');
       else if (field === 'groupName') groupProjectionFields.push('groupName');
       else rootProjection[field] = value;
@@ -196,8 +156,6 @@ export const getJoinRequests = async (
 
     const userProjection = userProjectionFields.join(' ') || 'userName';
     const groupProjection = groupProjectionFields.join(' ') || 'groupName';
-
-    // ✅ Fetch
     const totalCount = await JoinRequest.countDocuments(baseQuery);
     const requests = await JoinRequest.find(baseQuery, rootProjection)
       .populate('userId', userProjection)
@@ -206,7 +164,6 @@ export const getJoinRequests = async (
       .limit(limit)
       .lean();
 
-    // ✅ Response
     req.apiResponse = {
       success: true,
       message:
@@ -220,7 +177,6 @@ export const getJoinRequests = async (
         requests,
       },
     };
-
     next();
   } catch (error) {
     next(error);
@@ -228,7 +184,6 @@ export const getJoinRequests = async (
 };
 
 // ------------------ APPROVE OR REJECT JOIN REQUEST ------------------
-
 export const handleJoinRequest = async (
   req: Request,
   res: Response,
@@ -245,7 +200,6 @@ export const handleJoinRequest = async (
       };
       return next();
     }
-
     const request = await JoinRequest.findById(requestId);
     if (!request || request.status !== "pending") {
       req.apiResponse = {
@@ -264,7 +218,6 @@ export const handleJoinRequest = async (
         };
         return next();
       }
-
       if (group.members.length >= group.maxUsers) {
         req.apiResponse = {
           success: false,
@@ -272,18 +225,15 @@ export const handleJoinRequest = async (
         };
         return next();
       }
-
       group.members.push(request.userId);
       await group.save();
       request.status = "approved";
     }
-
     if (action === "reject") {
       request.status = "rejected";
     }
 
     await request.save();
-
     req.apiResponse = {
       success: true,
       message: `Request ${action}ed successfully`,
