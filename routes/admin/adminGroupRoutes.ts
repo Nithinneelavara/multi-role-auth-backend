@@ -14,7 +14,6 @@ import { notifyGroupMembersViaSocket, getGroupNotifications, notifySpecificGroup
 
 const router = express.Router();
 
-// Apply JWT protection to all routes
 const protectAdmin = passport.authenticate('admin', { session: false });
 
 /**
@@ -570,8 +569,6 @@ router.post('/groups/:groupId/notify', entryLogger, protectAdmin, notifySpecific
  *       500:
  *         description: Internal server error
  */
-
 router.post('/groups/notifications', entryLogger, protectAdmin, getGroupNotifications, exitLogger);
-
 
 export default router;

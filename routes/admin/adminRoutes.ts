@@ -3,7 +3,6 @@ import { adminLogin, adminLogout, getAdminStats } from '../../controllers/admin/
 import { refreshAdminToken } from '../../controllers/admin/refreshAdminTocken';
 import adminGroupRoutes from './adminGroupRoutes';
 
-
 const router = express.Router();
 
 /**
@@ -148,7 +147,6 @@ router.post('/refresh-token', refreshAdminToken);
  *       500:
  *         description: Server error
  */
-
 router.get('/dashboard/stats', getAdminStats);
 
 router.use('/', adminGroupRoutes); 

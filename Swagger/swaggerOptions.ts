@@ -29,5 +29,4 @@ export const swaggerOptions = {
     ],
   },
   apis: ['./routes/**/*.ts'],
- // ✅ Recursively includes all .ts files in admin/ and user/
 };

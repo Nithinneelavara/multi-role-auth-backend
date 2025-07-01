@@ -14,7 +14,6 @@ if (!JWT_SECRET) {
   throw new Error('JWT_SECRET is not defined');
 }
 
-// Generalized strategy function for any user type
 function createBearerStrategy(userType: 'admin' | 'member' | 'user', model: any, strategyName?: string) {
   passport.use(
     strategyName || userType,
@@ -23,12 +22,12 @@ function createBearerStrategy(userType: 'admin' | 'member' | 'user', model: any,
         const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
 
         const stored = await AccessToken.findOne({ token, userType });
-        if (!stored) return done(null, false); // Token not found or revoked
+        if (!stored) return done(null, false); 
 
         const user = await model.findById(decoded.id);
         if (!user) return done(null, false);
 
-        return done(null, user); // req.user = user
+        return done(null, user); 
       } catch (err) {
         return done(null, false);
       }
@@ -36,8 +35,7 @@ function createBearerStrategy(userType: 'admin' | 'member' | 'user', model: any,
   );
 }
 
-// Apply bearer strategies
-createBearerStrategy('admin', Admin); // default strategy
+createBearerStrategy('admin', Admin); 
 createBearerStrategy('member', Member, 'member-bearer');
 createBearerStrategy('user', User, 'user-bearer');
 

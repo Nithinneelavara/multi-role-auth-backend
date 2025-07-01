@@ -33,23 +33,16 @@ export const exitLogger = (req: Request, res: Response, next: NextFunction) => {
         timeSpentMs: spentTimeMs,
         timestamp: new Date(endTime).toISOString()
       };
-
       console.log('[EXIT LOG]:\n' + JSON.stringify(logObject, null, 2));
-
       resAny._exitLogged = true;
     }
-
     return oldSend.call(this, body);
   };
-
-  //  Send response if it exists
   if (req.apiResponse) {
     return res
       .status(res.statusCode < 400 ? 200 : res.statusCode)
       .send(req.apiResponse);
   }
-
-  //  Error if no exit point was reached
   const errorMessage = ' Cannot send response: no exit point reached (req.apiResponse not set)';
   console.error('[EXIT ERROR]:', errorMessage);
 

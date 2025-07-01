@@ -9,7 +9,6 @@ dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
-
 let io: Server;
 
 export const initSocket = (server: any) => {
@@ -18,11 +17,9 @@ export const initSocket = (server: any) => {
   });
 
   io.on('connection', (socket) => {
-   // const token = socket.handshake.auth?.token;
     const token =
-  socket.handshake.auth?.token ||
-  socket.handshake.query?.token;  // fallback to query param
-
+      socket.handshake.auth?.token ||
+      socket.handshake.query?.token;  
     let userId: string | null = null;
 
     if (token) {
@@ -42,7 +39,6 @@ export const initSocket = (server: any) => {
 
     const memberId = socket.handshake.query.memberId as string;
     const groupId = socket.handshake.query.groupId as string;
-
     const finalId = userId || memberId || groupId;
 
     if (finalId) {
@@ -54,8 +50,8 @@ export const initSocket = (server: any) => {
       console.warn(' Connection rejected: No userId, memberId, or groupId provided.');
     }
 
-    //  USER-TO-USER MESSAGE HANDLING
     socket.on('send-user-message', async ({ toUserId, message }) => {
+
       const fromUserId = socket.handshake.query.userId as string;
 
       if (!fromUserId || !toUserId || !message) {
@@ -70,11 +66,9 @@ export const initSocket = (server: any) => {
         timestamp: new Date(),
       };
 
-      // 📤 Emit to recipient's room
       io.to(`notification-${toUserId}`).emit(`direct-message-${toUserId}`, payload);
       console.log(` User message sent from ${fromUserId} to ${toUserId}`);
 
-      // 💾 Save user-to-user message
       try {
         await Message.create({
           messageType: 'user',
@@ -112,11 +106,9 @@ export function sendNotification(
     const event = `notification-${targetId}`;
     const payload = { targetId, message, data };
 
-    //  Emit to clients
     io.to(room).emit(event, payload);
     console.log(`✅ ${role} notification sent to ${room}`);
 
-    // ✅ USER or MEMBER Notification: save to DB
     if (role === 'user' || role === 'member') {
       const NotificationModel = role === 'member' ? MemberNotification : Notification;
 
@@ -130,12 +122,9 @@ export function sendNotification(
         console.error(` Error saving ${role} notification:`, err);
       });
     }
-
-    // 🟡 GROUP: do not save again; it’s already handled in notifySpecificGroup
     else if (role === 'group') {
       console.log(`ℹ Group notification emitted only (not saved again)`);
     }
-
   } catch (error) {
     console.error(' Error in sendNotification:', error);
   }
