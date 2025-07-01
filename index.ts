@@ -16,33 +16,50 @@ import memberRoutes from './routes/admin/memberRoutes';
 import memberAuthRoutes from './routes/admin/memberAuthRoute';
 
 import { Request, Response, NextFunction } from 'express';
-import { initSocket } from "./socket/index"; // Adjust path as needed
-import http from 'http'; // <-- Add this
+import { initSocket } from "./socket/index"; 
+import http from 'http'; 
 import notificationRoutes from "./routes/user/notificationRoutes";
 import notificationMemberRoute from './routes/admin/notificationMemberRoutes';
 import userGroupRoutes from './routes/user/userGroupRoutes'; 
+import storageRoutes from './routes/admin/storageRoutes';
+import { startMessageScheduler } from './utils/schedular';
+import memberPaymentRoutes from './routes/admin/memberPaymentRoutes';
+import cors from 'cors';
 
 dotenv.config(); 
 
 const app = express();
+
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/webhook') {
+    next(); // Let express.raw() handle it
+  } else {
+    express.json()(req, res, next); // Apply json parser for everything else
+  }
+});
+
+
 const PORT = 3000;
 
+startMessageScheduler();
+app.use(cors());
 app.use(cookieParser());
-app.use(express.json());
 app.use(passport.initialize());
 
 
 // Routes
 app.use('/api/admin', adminRoutes);
+app.use('/api/storage', storageRoutes);
+app.use('/api', memberPaymentRoutes);
 
 app.use('/api/users', userRoutes);
 app.use('/api/auth',userAuthRoutes );
+app.use("/api/notification", notificationRoutes);
+app.use('/api/member', userGroupRoutes);
 
 app.use('/api/members', memberRoutes);
 app.use('/api/members', memberAuthRoutes);
-app.use("/api/notification", notificationRoutes);
 app.use('/api/notifications/member', notificationMemberRoute);
-app.use('/api/member', userGroupRoutes);
 
 
 // Swagger setup

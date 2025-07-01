@@ -85,11 +85,11 @@ export function sendNotification(
     const event = `notification-${targetId}`;
     const payload = { targetId, message, data };
 
-    //  Emit notification
+    //  Emit to clients
     io.to(room).emit(event, payload);
-    console.log(` ${role} notification sent to ${room}`);
+    console.log(`✅ ${role} notification sent to ${room}`);
 
-    //  USER OR MEMBER NOTIFICATIONS
+    // ✅ USER or MEMBER Notification: save to DB
     if (role === 'user' || role === 'member') {
       const NotificationModel = role === 'member' ? MemberNotification : Notification;
 
@@ -100,40 +100,18 @@ export function sendNotification(
       });
 
       newNotification.save().catch((err) => {
-        console.error(`❌ Error saving ${role} notification:`, err);
+        console.error(` Error saving ${role} notification:`, err);
       });
     }
 
-    // 💾 GROUP NOTIFICATION (saved as admin message)
+    // 🟡 GROUP: do not save again; it’s already handled in notifySpecificGroup
     else if (role === 'group') {
-      Group.findById(targetId)
-        .then((group) => {
-          if (!group) {
-            console.warn(` Group not found: ${targetId}`);
-            return;
-          }
-
-          Message.create({
-            messageType: 'admin',
-            senderId: group.createdBy,
-            senderModel: 'Admin',
-            groupId: group._id,
-            groupName: group.groupName,
-            message,
-            timestamp: new Date(),
-          })
-            .then(() => {
-              console.log('💾 Group message saved to DB');
-            })
-            .catch((err) => {
-              console.error(' Failed to save group message:', err);
-            });
-        })
-        .catch((err) => {
-          console.error(' DB error while finding group:', err);
-        });
+      console.log(`ℹ Group notification emitted only (not saved again)`);
     }
+
   } catch (error) {
     console.error(' Error in sendNotification:', error);
   }
 }
+
+

@@ -4,6 +4,10 @@ import User from '../../models/db/user';
 import GroupMessage from '../../models/db/message';
 import { sendNotification } from '../../socket';
 import mongoose from 'mongoose';
+import { parseStandardQueryParams as parseQueryParams, buildSearchFilterQuery, buildProjection, getPagination,} from '../../controllers/generic/utils';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+dayjs.extend(utc);
 
 // Helper to safely extract user ID from request
 function getUserId(req: Request): string {
@@ -11,6 +15,12 @@ function getUserId(req: Request): string {
     return (req.user as any)._id;
   }
   throw new Error('Invalid or missing user');
+}
+
+function generateS3Url(fileName: string): string {
+  const bucket = process.env.S3_BUCKET_NAME!;
+  const region = process.env.AWS_REGION!;
+  return ` https://${bucket}.s3.${region}.amazonaws.com/${fileName} `;
 }
 
 // Send notification to all groups of the admin
@@ -87,6 +97,7 @@ export const notifyGroupMembersViaSocket = async (
 };
 
 // Send notification to a specific group
+
 export const notifySpecificGroup = async (
   req: Request,
   res: Response,
@@ -95,12 +106,12 @@ export const notifySpecificGroup = async (
   try {
     const adminId = getUserId(req);
     const groupId = req.params.groupId;
-    const { message } = req.body;
+    const { message, fileName ,scheduledTime } = req.body;
 
-    if (!groupId || !message || typeof message !== 'string') {
+    if (!groupId || (!message && !fileName)) {
       req.apiResponse = {
         success: false,
-        message: 'Both groupId (from route) and message (in body) are required.',
+        message: 'Message or fileName is required.',
       };
       return next();
     }
@@ -116,30 +127,40 @@ export const notifySpecificGroup = async (
 
     const approvedMembers = await User.find({ _id: { $in: group.members } });
 
+    const notificationPayload = {
+      groupId: group._id,
+      groupName: group.groupName,
+      file: fileName ? generateS3Url(fileName) : '', // ✅ use full URL in notification
+    };
+
     approvedMembers.forEach((user) => {
       sendNotification(
         user._id.toString(),
-        message,
-        { groupId: group._id, groupName: group.groupName },
+        message || '',
+        notificationPayload,
         'user'
       );
     });
 
     sendNotification(
       group._id.toString(),
-      message,
-      { groupId: group._id, groupName: group.groupName },
+      message || '',
+      notificationPayload,
       'group'
     );
 
+    // ✅ Save only fileName in DB
     await GroupMessage.create({
       messageType: 'admin',
       senderId: adminId,
       senderModel: 'Admin',
       groupId: group._id,
       groupName: group.groupName,
-      message,
+      message: message || '',
+      file: fileName || '', // ✅ only store filename
       timestamp: new Date(),
+      scheduledTime: scheduledTime ? new Date(scheduledTime) : null,
+      isSent: scheduledTime ? false : true, // if scheduled, mark as unsent
     });
 
     req.apiResponse = {
@@ -149,10 +170,11 @@ export const notifySpecificGroup = async (
     next();
   } catch (error) {
     next(error);
-  }
+  }
 };
 
 // Retrieve all group notifications sent by the admin
+
 export const getGroupNotifications = async (
   req: Request,
   res: Response,
@@ -160,19 +182,55 @@ export const getGroupNotifications = async (
 ) => {
   try {
     const adminId = getUserId(req);
-    const groupId = req.query.groupId as string | undefined;
 
-    const filter: any = {
+    // ✅ Parse input from standardized request body
+    const {
+      page,
+      limit,
+      searchTerm,
+      searchFields,
+      filter = {},
+      projection,
+    } = parseQueryParams(req.body);
+
+    const { skip } = getPagination(page, limit);
+
+    // ✅ Construct MongoDB query filter
+    const dbFilter: any = {
       senderId: adminId,
-      messageType: 'admin',
+      ...filter,
+      ...(searchTerm ? buildSearchFilterQuery(searchFields, searchTerm) : {}),
     };
 
+    const groupId = req.body.groupId;
     if (groupId && mongoose.Types.ObjectId.isValid(groupId)) {
-      filter.groupId = new mongoose.Types.ObjectId(groupId);
+      dbFilter.groupId = new mongoose.Types.ObjectId(groupId);
     }
 
-    const messages = await GroupMessage.find(filter);
+    // ✅ Clean and validate projection
+    const { projection: cleanProjection, mode } = buildProjection(projection);
+    if (mode === 'invalid') {
+      throw new Error('Projection cannot mix inclusion and exclusion.');
+    }
 
+    // ✅ Ensure required fields are included if using inclusion
+    if (mode !== 'exclude') {
+      cleanProjection.groupId = 1;
+      cleanProjection.groupName = 1;
+      cleanProjection.message = 1;
+      cleanProjection.timestamp = 1;
+      cleanProjection.file = 1;
+    }
+
+    // ✅ DB Query
+    const totalCount = await GroupMessage.countDocuments(dbFilter);
+    const messages = await GroupMessage.find(dbFilter, cleanProjection)
+      .sort({ timestamp: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    // ✅ Group notifications by groupId
     const grouped = messages.reduce((acc: any, msg) => {
       const id = msg.groupId?.toString();
       if (!id) return acc;
@@ -188,8 +246,9 @@ export const getGroupNotifications = async (
 
       acc[id].totalMessages++;
       acc[id].notifications.push({
-        message: msg.message,
-        timestamp: msg.timestamp,
+        ...(msg.message && { message: msg.message }),
+        ...(msg.timestamp && { timestamp: msg.timestamp }),
+        file: msg.file ? generateS3Url(msg.file) : '',
       });
 
       return acc;
@@ -197,13 +256,19 @@ export const getGroupNotifications = async (
 
     const result = Object.values(grouped);
 
+    // ✅ Set standardized response
     req.apiResponse = {
       success: true,
-      message: result.length > 0
-        ? `Group notification${groupId ? '' : 's'} fetched.`
-        : 'No notifications found.',
-      totalMessagesSentByAdmin: messages.length,
-      data: result,
+      message:
+        result.length > 0
+          ? `Group notification${groupId ? '' : 's'} fetched.`
+          : 'No notifications found.',
+      totalMessagesSentByAdmin: totalCount,
+      data: {
+        page,
+        limit,
+        results: result,
+      },
     };
 
     next();

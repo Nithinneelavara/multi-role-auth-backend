@@ -26,7 +26,7 @@ const protectAdmin = passport.authenticate('admin', { session: false });
 
 /**
  * @swagger
- * /api/admin/groups:
+ * /api/admin/groups/create:
  *   post:
  *     summary: Create a new group
  *     tags: [Admin - Groups]
@@ -52,32 +52,145 @@ const protectAdmin = passport.authenticate('admin', { session: false });
  *       500:
  *         description: Server error
  */
-router.post('/groups',entryLogger, protectAdmin, createGroup, exitLogger);
+router.post('/groups/create',entryLogger, protectAdmin, createGroup, exitLogger);
 
 /**
  * @swagger
  * /api/admin/groups:
- *   get:
- *     summary: Get all groups created by the admin with members
+ *   post:
+ *     summary: Get all groups created by the admin with members (supports filter, search, pagination, projection)
  *     tags: [Admin - Groups]
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               search:
+ *                 type: string
+ *                 example: "Warriors"
+ *               filter:
+ *                 type: object
+ *                 example:
+ *                   maxUsers:
+ *                     $gte: 5
+ *               pagination:
+ *                 type: object
+ *                 properties:
+ *                   page:
+ *                     type: integer
+ *                     example: 1
+ *                   limit:
+ *                     type: integer
+ *                     example: 10
+ *               projection:
+ *                 type: object
+ *                 example:
+ *                   groupName: 1
+ *                   maxUsers: 1
  *     responses:
  *       200:
  *         description: List of groups with members
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Groups with members fetched successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalCount:
+ *                       type: integer
+ *                       example: 25
+ *                     page:
+ *                       type: integer
+ *                       example: 1
+ *                     limit:
+ *                       type: integer
+ *                       example: 10
+ *                     groups:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                             example: "685b88cf20c14bb2d38967fa"
+ *                           groupName:
+ *                             type: string
+ *                             example: "Champions"
+ *                           maxUsers:
+ *                             type: integer
+ *                             example: 8
+ *                           members:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 _id:
+ *                                   type: string
+ *                                   example: "68524625e06c4aa1dd8ca419"
+ *                                 userName:
+ *                                   type: string
+ *                                   example: "techExplorer95"
+ *                                 email:
+ *                                   type: string
+ *                                   example: "tech.explorer95@example.com"
  *       500:
  *         description: Server error
  */
-router.get('/groups', entryLogger, protectAdmin, getAllGroupsWithUsers, exitLogger);
+
+router.post('/groups', entryLogger, protectAdmin, getAllGroupsWithUsers, exitLogger);
 
 /**
  * @swagger
  * /api/admin/groups/requests:
- *   get:
- *     summary: Get all pending join requests for groups created by the admin
+ *   post:
+ *     summary: Get all pending join requests for admin's groups (with optional filters, search, pagination, and projection)
  *     tags: [Admin - Groups]
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               search:
+ *                 type: string
+ *                 description: Text to search in request messages (case-insensitive, partial match)
+ *                 example: "john"
+ *               filter:
+ *                 type: object
+ *                 description: Filter join requests based on fields like status
+ *                 example: { "status": "pending" }
+ *               pagination:
+ *                 type: object
+ *                 description: Pagination settings
+ *                 properties:
+ *                   page:
+ *                     type: integer
+ *                     example: 1
+ *                   limit:
+ *                     type: integer
+ *                     example: 10
+ *               projection:
+ *                 type: object
+ *                 description: >
+ *                   Fields to include or exclude in the response.
+ *                   For populated fields, only `groupName` (from groupId) and `userName` (from userId) are supported.
+ *                   If projection is not provided, both will be returned by default.
+ *                 example: { "groupName": 1, "userName": 1 }
  *     responses:
  *       200:
  *         description: List of pending join requests
@@ -93,32 +206,39 @@ router.get('/groups', entryLogger, protectAdmin, getAllGroupsWithUsers, exitLogg
  *                   type: string
  *                   example: Join requests fetched successfully
  *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       _id:
- *                         type: string
- *                       groupId:
+ *                   type: object
+ *                   properties:
+ *                     totalCount:
+ *                       type: integer
+ *                       example: 3
+ *                     page:
+ *                       type: integer
+ *                       example: 1
+ *                     limit:
+ *                       type: integer
+ *                       example: 10
+ *                     requests:
+ *                       type: array
+ *                       items:
  *                         type: object
+ *                         description: >
+ *                           The response fields depend on the projection.
+ *                           By default, only `groupName` and `userName` are returned.
  *                         properties:
  *                           _id:
  *                             type: string
+ *                             example: "685d2293e053515181298843"
  *                           groupName:
  *                             type: string
- *                       userId:
- *                         type: object
- *                         properties:
- *                           _id:
- *                             type: string
+ *                             example: "pirates"
  *                           userName:
  *                             type: string
- *                           email:
- *                             type: string
+ *                             example: "akash_mehta"
  *       500:
  *         description: Server error
  */
-router.get('/groups/requests', entryLogger, protectAdmin, getJoinRequests, exitLogger);
+
+router.post('/groups/requests', entryLogger, protectAdmin, getJoinRequests, exitLogger);
 
 
 /**
@@ -280,36 +400,57 @@ router.post('/groups/notify', entryLogger, protectAdmin, notifyGroupMembersViaSo
  * @swagger
  * /api/admin/groups/{groupId}/notify:
  *   post:
- *     summary: Send a notification to a specific group (approved members only)
- *     tags: [Admin - Groups]
- *     security:
- *       - bearerAuth: []
+ *     summary: Send a message (immediately or scheduled) to a specific group
+ *     tags:
+ *       - Admin - Groups
  *     parameters:
- *       - in: path
- *         name: groupId
+ *       - name: groupId
+ *         in: path
+ *         required: true
  *         schema:
  *           type: string
- *         required: true
- *         description: ID of the group
+ *         description: The ID of the group to send the message to
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - message
  *             properties:
  *               message:
  *                 type: string
- *                 example: "Team meeting at 3 PM"
+ *                 example: "Reminder: meeting at 5 PM"
+ *               fileName:
+ *                 type: string
+ *                 example: "announcement.png"
+ *                 description: Optional. Name of file uploaded to S3 (must be uploaded before calling this API)
+ *               scheduledTime:
+ *                 type: string
+ *                 format: date-time
+ *                 example: "2025-06-25T17:00:00+05:30"
+ *                 description: Optional. Scheduled time in ISO format (use your local time with timezone, e.g., IST +05:30)
+ *             required:
+ *               - message
  *     responses:
- *       200:
- *         description: Notification sent successfully
- *       400:
- *         description: Missing parameters or invalid group
- *       500:
- *         description: Server error
+ *       '200':
+ *         description: Message scheduled or sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Message scheduled to be sent at 2025-06-25T17:00:00.000Z.
+ *       '400':
+ *         description: Bad request
+ *       '401':
+ *         description: Unauthorized
+ *       '404':
+ *         description: Group not found
  */
 
 router.post('/groups/:groupId/notify', entryLogger, protectAdmin, notifySpecificGroup , exitLogger);
@@ -317,21 +458,61 @@ router.post('/groups/:groupId/notify', entryLogger, protectAdmin, notifySpecific
 /**
  * @swagger
  * /api/admin/groups/notifications:
- *   get:
- *     summary: Get all group notifications sent by the admin
+ *   post:
+ *     summary: Get all group notifications sent by the admin (with optional filters, pagination, search, and projection)
  *     tags: [Admin - Groups]
  *     security:
  *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: groupId
- *         schema:
- *           type: string
- *         required: false
- *         description: (Optional) Filter notifications by group ID
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               groupId:
+ *                 type: string
+ *                 description: (Optional) Filter notifications by a specific group ID
+ *                 example: "665d0fe4f5311236168a109c"
+ *               pagination:
+ *                 type: object
+ *                 description: Pagination options
+ *                 properties:
+ *                   page:
+ *                     type: integer
+ *                     example: 1
+ *                   limit:
+ *                     type: integer
+ *                     example: 10
+ *               search:
+ *                 type: object
+ *                 description: Search filter configuration
+ *                 properties:
+ *                   term:
+ *                     type: string
+ *                     description: Keyword to search in message content
+ *                     example: "important"
+ *                   fields:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                     description: Fields to apply the search on
+ *                     example: ["message"]
+ *               filter:
+ *                 type: object
+ *                 description: Additional MongoDB filters
+ *                 additionalProperties: true
+ *                 example: { "groupName": "pirates" }
+ *               projection:
+ *                 type: object
+ *                 description: Fields to include (1) or exclude (0). Cannot mix inclusion & exclusion.
+ *                 additionalProperties:
+ *                   type: integer
+ *                   enum: [0, 1]
+ *                 example: { "message": 1, "timestamp": 1 }
  *     responses:
  *       200:
- *         description: List of group notifications
+ *         description: Grouped list of group notifications
  *         content:
  *           application/json:
  *             schema:
@@ -347,39 +528,50 @@ router.post('/groups/:groupId/notify', entryLogger, protectAdmin, notifySpecific
  *                   type: integer
  *                   example: 12
  *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       groupId:
- *                         type: string
- *                         example: 60d0fe4f5311236168a109ca
- *                       groupName:
- *                         type: string
- *                         example: Alpha Group
- *                       totalMessages:
- *                         type: integer
- *                         example: 5
- *                       notifications:
- *                         type: array
- *                         items:
- *                           type: object
- *                           properties:
- *                             message:
- *                               type: string
- *                               example: Important update for all members.
- *                             timestamp:
- *                               type: string
- *                               format: date-time
- *                               example: 2025-06-23T10:30:00.000Z
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                       example: 1
+ *                     limit:
+ *                       type: integer
+ *                       example: 10
+ *                     results:
+ *                       type: array
+ *                       description: List of grouped notifications
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           groupId:
+ *                             type: string
+ *                             example: "665d0fe4f5311236168a109c"
+ *                           groupName:
+ *                             type: string
+ *                             example: "Tech Titans"
+ *                           totalMessages:
+ *                             type: integer
+ *                             example: 5
+ *                           notifications:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 message:
+ *                                   type: string
+ *                                   example: "Meeting today at 5 PM"
+ *                                 timestamp:
+ *                                   type: string
+ *                                   format: date-time
+ *                                   example: "2025-06-23T10:30:00.000Z"
  *       400:
- *         description: Invalid groupId
+ *         description: Invalid input
  *       401:
  *         description: Unauthorized
  *       500:
  *         description: Internal server error
  */
 
-router.get('/groups/notifications', entryLogger, protectAdmin, getGroupNotifications, exitLogger);
+router.post('/groups/notifications', entryLogger, protectAdmin, getGroupNotifications, exitLogger);
+
 
 export default router;

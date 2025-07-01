@@ -4,5 +4,7 @@ export interface ApiResponse<T = any> {
   message: string;
   data?: T;
   totalMessagesSentByAdmin?: number;
+  page?: number;
+  limit?: number;
   error?: any;
 }

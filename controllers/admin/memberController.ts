@@ -2,7 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import Member from '../../models/db/member';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
-
+import mongoose from 'mongoose';
+import { parseStandardQueryParams as parseQueryParams, buildSearchFilterQuery, buildProjection, getPagination,} from '../../controllers/generic/utils';
 
 dotenv.config();
 const JWT_SECRET = process.env.JWT_SECRET!;
@@ -38,18 +39,63 @@ export const createMember = async (req: Request, res: Response, next: NextFuncti
   }
 };
 
-export const getMembers = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const members = await Member.find();
+//------------------ GETMEMBERS OPERATIONS ------------------
 
-    req.apiResponse = { 
-      code: 200,
+export const getMembers = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const {
+      page,
+      limit,
+      searchTerm,
+      searchFields,
+      filter = {},
+      projection,
+    } = parseQueryParams(req.body);
+
+    const { skip } = getPagination(page, limit);
+
+    const dbFilter: any = { ...filter };
+
+    // If ID is present in body, search only that record
+    if (req.body.id && mongoose.Types.ObjectId.isValid(req.body.id)) {
+      dbFilter._id = new mongoose.Types.ObjectId(req.body.id);
+    }
+
+    // Add search term if present
+    if (searchTerm) {
+      Object.assign(dbFilter, buildSearchFilterQuery(searchFields, searchTerm));
+    }
+
+    const { projection: cleanProjection, mode } = buildProjection(projection);
+    if (mode === 'invalid') {
+      throw new Error('Projection cannot mix inclusion and exclusion.');
+    }
+
+    const totalCount = await Member.countDocuments(dbFilter);
+    const members = await Member.find(dbFilter, cleanProjection)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    req.apiResponse = {
       success: true,
-      message: "Members retrieved successfully",
+      message:
+        members.length > 0
+          ? req.body.id
+            ? 'Member retrieved successfully.'
+            : 'Members retrieved successfully.'
+          : 'No members found.',
       data: {
-        totalCount: members.length,
-        totalData: members
-      }
+        totalCount,
+        page,
+        limit,
+        results: members,
+      },
     };
 
     next();
@@ -58,20 +104,7 @@ export const getMembers = async (req: Request, res: Response, next: NextFunction
   }
 };
 
-
-export const getMemberById = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const member = await Member.findById(req.params.id);
-    if (!member) return res.status(404).json({ message: 'Member not found' });
-    req.apiResponse = { 
-        success: true, 
-        message: " Member retrieved successfully ",
-        data: member };
-    next();
-  } catch (error) {
-    next(error);
-  }
-};
+//------------------ updateMember OPERATIONS ------------------
 
 export const updateMember = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -87,6 +120,9 @@ export const updateMember = async (req: Request, res: Response, next: NextFuncti
   }
 };
 
+
+//------------------ deleteMember OPERATIONS ------------------
+
 export const deleteMember = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const member = await Member.findByIdAndDelete(req.params.id);
@@ -99,109 +135,3 @@ export const deleteMember = async (req: Request, res: Response, next: NextFuncti
 };
 
 
-export const searchMembers = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    // 1. Read from nested payload
-    const pagination = req.body.pagination || {};
-    const search = req.body.search || {};
-    const filter = req.body.filter || {};
-    const projection = req.body.projection || {};
-
-    // 2. Extract pagination values
-    const page = parseInt(pagination.page) || 1;
-    const limit = parseInt(pagination.limit) || 10;
-    const skip = (page - 1) * limit;
-
-    // 3. Extract search values
-    const term = search.term || '';
-    const searchFields = Array.isArray(search.fields) && search.fields.length > 0
-      ? search.fields
-      : ['name', 'email'];
-
-    // 4. Build match stage (search + filter)
-    const matchStage: any = {};
-
-    // Add non-empty filter fields
-    for (const key in filter) {
-      if (
-        filter[key] !== undefined &&
-        filter[key] !== null &&
-        filter[key] !== ''
-      ) {
-        matchStage[key] = filter[key];
-      }
-    }
-
-    // Add search logic if term is provided
-    if (term && searchFields.length > 0) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (emailRegex.test(term) && searchFields.includes('email')) {
-        matchStage.email = { $regex: term, $options: 'i' };
-      } else {
-        const terms = term.trim().split(/\s+/);
-        matchStage.$or = searchFields.flatMap((field: string) =>
-          terms.map((t: string) => ({
-            [field]: { $regex: t, $options: 'i' }
-          }))
-        );
-      }
-    }
-
-    // 5. Build aggregation pipeline
-    const pipeline: any[] = [];
-    if (Object.keys(matchStage).length > 0) {
-      pipeline.push({ $match: matchStage });
-    }
-
-    // 6. Add projection stage if provided
-    if (Object.keys(projection).length > 0) {
-      const values = Object.values(projection);
-      const allOnes = values.every(v => v === 1);
-      const allZeros = values.every(v => v === 0);
-      if (allOnes || allZeros) {
-        pipeline.push({ $project: projection });
-      } else {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid projection: cannot mix 1 and 0 (except _id). Use only one style.'
-        });
-      }
-    }
-
-    // 7. Add pagination stages
-    pipeline.push(
-      { $skip: skip },
-      { $limit: limit }
-    );
-
-    // 8. Execute aggregation and count
-    const [totalCountResult, members] = await Promise.all([
-      Member.countDocuments(matchStage),
-      Member.aggregate(pipeline)
-    ]);
-
-    // 9. Respond
-    req.apiResponse = {
-      code: 200,
-      success: true,
-      message: 'Members retrieved using aggregation',
-      data: {
-        totalCount: totalCountResult,
-        page,
-        limit,
-        totalPages: Math.ceil(totalCountResult / limit),
-        members
-      }
-    };
-
-    next();
-  } catch (error) {
-    console.error('[ERROR]', error);
-    req.apiResponse = {
-      success: false,
-      message: 'Internal server error',
-      error
-    };
-    next();
-  }
-};

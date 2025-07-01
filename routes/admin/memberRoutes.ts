@@ -8,10 +8,8 @@ import { validateRequest } from '../../middleware/validateRequest';
 import {
   createMember,
   getMembers,    
-  getMemberById,
   updateMember,
-  deleteMember,
-  searchMembers
+  deleteMember
 } from '../../controllers/admin/memberController';
 
 const router = express.Router();
@@ -76,44 +74,109 @@ router.post(
 
 /**
  * @swagger
- * /api/members:
- *   get:
- *     summary: Get all members
+ * /api/members/get:
+ *   post:
+ *     summary: Get members with optional filters, search, pagination, and projection
  *     tags: [Members]
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               id:
+ *                 type: string
+ *                 description: (Optional) Fetch a specific member by ID
+ *                 example: "665f2e41c3ab2d4a4d75b73f"
+ *               pagination:
+ *                 type: object
+ *                 description: (Optional) Pagination options
+ *                 properties:
+ *                   page:
+ *                     type: integer
+ *                     example: 1
+ *                   limit:
+ *                     type: integer
+ *                     example: 10
+ *               search:
+ *                 type: object
+ *                 description: (Optional) Search members by keyword in specific fields
+ *                 properties:
+ *                   term:
+ *                     type: string
+ *                     description: Single term or comma-separated terms for searching (e.g. "ravi", "ravi,john")
+ *                     example: "ravi"
+ *                   fields:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                     description: Fields to search in. Defaults to ["userName", "email"] if omitted
+ *                     example: ["userName", "email"]
+ *               filter:
+ *                 type: object
+ *                 description: (Optional) MongoDB-style filters
+ *                 example: { "status": "active" }
+ *               projection:
+ *                 type: object
+ *                 description: (Optional) Fields to include or exclude (cannot mix 1 and 0)
+ *                 example: { "userName": 1, "email": 1 }
  *     responses:
  *       200:
- *         description: List of members
+ *         description: List of members (filtered)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Members retrieved successfully.
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalCount:
+ *                       type: integer
+ *                       example: 42
+ *                     page:
+ *                       type: integer
+ *                       example: 1
+ *                     limit:
+ *                       type: integer
+ *                       example: 10
+ *                     results:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                             example: "665f2e41c3ab2d4a4d75b73f"
+ *                           userName:
+ *                             type: string
+ *                             example: "ravi_123"
+ *                           email:
+ *                             type: string
+ *                             example: "ravi@example.com"
+ *                           status:
+ *                             type: string
+ *                             example: "active"
+ *       400:
+ *         description: Bad request (invalid filters or projection)
  *       401:
  *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
  */
-router.get('/', entryLogger, protectAdmin, getMembers, exitLogger);
 
-/**
- * @swagger
- * /api/members/{id}:
- *   get:
- *     summary: Get a member by ID
- *     tags: [Members]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         description: The member ID
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Member data
- *       401:
- *         description: Unauthorized
- *       404:
- *         description: Member not found
- */
-router.get('/:id', entryLogger, protectAdmin, getMemberById, exitLogger);
+
+router.post('/get', entryLogger, protectAdmin, getMembers, exitLogger);
+
 
 /**
  * @swagger
@@ -187,84 +250,5 @@ router.put('/:id', entryLogger, protectAdmin, updateMember, exitLogger);
  */
 router.delete('/:id', entryLogger, protectAdmin, deleteMember, exitLogger);
 
-/**
- * @swagger
- * /api/members/search:
- *   post:
- *     summary: Search, filter, project, and paginate members
- *     tags: [Members]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               pagination:
- *                 type: object
- *                 properties:
- *                   page:
- *                     type: integer
- *                     default: 1
- *                   limit:
- *                     type: integer
- *                     default: 10
- *               search:
- *                 type: object
- *                 properties:
- *                   term:
- *                     type: string
- *                     example: "john"
- *                   fields:
- *                     type: array
- *                     items:
- *                       type: string
- *                     example: ["name", "email"]
- *               filter:
- *                 type: object
- *                 additionalProperties: true
- *                 example:
- *                   address: "Bangalore"
- *               projection:
- *                 type: object
- *                 additionalProperties:
- *                   type: integer
- *                 example:
- *                   name: 1
- *                   email: 1
- *     responses:
- *       200:
- *         description: Members retrieved using aggregation
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 code:
- *                   type: integer
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
- *                 data:
- *                   type: object
- *                   properties:
- *                     totalCount:
- *                       type: integer
- *                     page:
- *                       type: integer
- *                     limit:
- *                       type: integer
- *                     totalPages:
- *                       type: integer
- *                     members:
- *                       type: array
- *       400:
- *         description: Invalid input or no operations enabled
- *       500:
- *         description: Internal server error
- */
-
-router.post('/search', entryLogger, protectAdmin, searchMembers, exitLogger);
 
 export default router;
