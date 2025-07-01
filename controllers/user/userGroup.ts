@@ -5,6 +5,8 @@ import JoinRequest from "../../models/db/joinRequest";
 import { sendNotification } from "../../socket";
 import User from '../../models/db/user';
 import mongoose from "mongoose";
+import {  parseStandardQueryParams, buildSearchFilterQuery, getPagination, buildProjection, } from "../generic/utils";
+
 
 // ----------- Helper Function for Safe User ID Extraction -----------
 function getUserId(req: Request): string {
@@ -23,30 +25,95 @@ export const getAvailableGroups = async (
 ) => {
   try {
     const userId = (req.user as any)._id;
+    const { groupId } = req.body;
 
-    // Step 1: Find approved group IDs for this user
+    const {
+      page,
+      limit,
+      searchTerm,
+      searchFields,
+      filter,
+      projection,
+    } = parseStandardQueryParams(req.body);
+
     const approvedRequests = await JoinRequest.find({
       userId,
-      status: "approved",
-    }).select("groupId");
+      status: 'approved',
+    }).select('groupId');
 
-    const joinedGroupIds = approvedRequests.map((request) => request.groupId);
+    const joinedGroupIds = approvedRequests.map((r) => r.groupId.toString());
+    const { skip, limit: safeLimit } = getPagination(page, limit);
+    const { projection: mongoProjection } = buildProjection(projection);
 
-    // Step 2: Find groups excluding those already approved
-    const groups = await Group.find({
+    // ✅ CASE 1: groupId provided → return only that group (if not joined)
+    if (groupId) {
+      if (joinedGroupIds.includes(groupId)) {
+        req.apiResponse = {
+          success: true,
+          message: 'Group already joined, not available.',
+          data: {
+            totalCount: 0,
+            page,
+            limit: safeLimit,
+            groups: [],
+          },
+        };
+        return next();
+      }
+
+      const group = await Group.findById(groupId).select(mongoProjection);
+      if (!group) {
+        req.apiResponse = {
+          success: false,
+          message: 'Group not found',
+          data: null,
+        };
+        return next();
+      }
+
+      req.apiResponse = {
+        success: true,
+        message: 'Group retrieved successfully',
+        data: {
+          totalCount: 1,
+          page,
+          limit: safeLimit,
+          groups: [group],
+        },
+      };
+      return next();
+    }
+
+    // ✅ CASE 2: No groupId → return all available groups
+    const baseQuery: any = {
       _id: { $nin: joinedGroupIds },
-    }).select("groupName maxUsers members");
+      ...filter,
+      ...buildSearchFilterQuery(searchFields, searchTerm),
+    };
+
+    const totalCount = await Group.countDocuments(baseQuery);
+    const availableGroups = await Group.find(baseQuery)
+      .select(mongoProjection)
+      .skip(skip)
+      .limit(safeLimit);
 
     req.apiResponse = {
       success: true,
-      message: "Available groups retrieved successfully",
-      data: groups,
+      message: 'Available groups retrieved successfully',
+      data: {
+        totalCount,
+        page,
+        limit: safeLimit,
+        groups: availableGroups,
+      },
     };
+
     next();
   } catch (err) {
     next(err);
   }
 };
+
 
 // -------------------- SEND JOIN REQUEST --------------------
 export const sendJoinRequest = async (
@@ -101,33 +168,92 @@ export const getApprovedGroupsForUser = async (
 ) => {
   try {
     const userId = getUserId(req);
+    const { groupId } = req.body;
 
+    const {
+      page,
+      limit,
+      searchTerm,
+      searchFields,
+      filter,
+      projection,
+    } = parseStandardQueryParams(req.body);
+
+    // Step 1: Get approved group IDs for the user
     const approvedRequests = await JoinRequest.find({
       userId,
-      status: "approved",
-    })
-      .populate("groupId", "groupName")
-      .lean();
+      status: 'approved',
+    }).select('groupId');
 
-    const approvedGroups = approvedRequests.map((request) => {
-      const group = request.groupId as unknown as {
-        _id: string;
-        groupName: string;
+    const approvedGroupIds = approvedRequests.map((req) =>
+      req.groupId.toString()
+    );
+
+    const { skip, limit: safeLimit } = getPagination(page, limit);
+    const { projection: mongoProjection } = buildProjection(projection);
+
+    // CASE 1: specific groupId given — only return that group if approved
+    if (groupId) {
+      if (!approvedGroupIds.includes(groupId)) {
+        req.apiResponse = {
+          success: false,
+          message: 'Group not approved or not found',
+          data: null,
+        };
+        return next();
+      }
+
+      const specificGroup = await Group.findById(groupId).select(mongoProjection);
+      if (!specificGroup) {
+        req.apiResponse = {
+          success: false,
+          message: 'Group not found',
+          data: null,
+        };
+        return next();
+      }
+
+      req.apiResponse = {
+        success: true,
+        message: 'Group retrieved successfully',
+        data: {
+          totalCount: 1,
+          page,
+          limit: safeLimit,
+          groups: [specificGroup],
+        },
       };
-      return {
-        groupId: group._id,
-        groupName: group.groupName,
-      };
-    });
+      return next();
+    }
+
+    // CASE 2: return all approved groups with filters
+    const baseQuery: any = {
+      _id: { $in: approvedGroupIds },
+      ...filter,
+      ...buildSearchFilterQuery(searchFields, searchTerm),
+    };
+
+    const totalCount = await Group.countDocuments(baseQuery);
+
+    const approvedGroups = await Group.find(baseQuery)
+      .select(mongoProjection)
+      .skip(skip)
+      .limit(safeLimit);
 
     req.apiResponse = {
       success: true,
       message:
         approvedGroups.length > 0
-          ? "Approved groups retrieved successfully"
-          : "Your group approval is pending",
-      data: approvedGroups,
+          ? 'Approved groups retrieved successfully'
+          : 'Your group approval is pending',
+      data: {
+        totalCount,
+        page,
+        limit: safeLimit,
+        groups: approvedGroups,
+      },
     };
+
     next();
   } catch (err) {
     next(err);
@@ -135,6 +261,7 @@ export const getApprovedGroupsForUser = async (
 };
 
 // -------------------- GET MY GROUP MESSAGES (NEW) --------------------
+
 export const getMyGroupMessages = async (
   req: Request,
   res: Response,
@@ -142,18 +269,27 @@ export const getMyGroupMessages = async (
 ) => {
   try {
     const userId = getUserId(req);
-    const { groupId } = req.query;
+    const { groupId } = req.body;
+
+    const {
+      page,
+      limit,
+      searchTerm,
+      searchFields,
+      filter,
+      projection,
+    } = parseStandardQueryParams(req.body);
 
     // Step 1: Get approved group IDs for this user
     const approvedRequests = await JoinRequest.find({
       userId,
       status: "approved",
-    });
+    }).select("groupId");
 
-    const approvedGroupIds = approvedRequests.map((req) => req.groupId.toString());
+    const approvedGroupIds = approvedRequests.map((r) => r.groupId.toString());
 
-    // Optional groupId filter
-    if (groupId && !approvedGroupIds.includes(groupId.toString())) {
+    // Reject if groupId is not approved
+    if (groupId && !approvedGroupIds.includes(groupId)) {
       req.apiResponse = {
         success: false,
         message: "You are not a member of this group or group not approved.",
@@ -164,21 +300,35 @@ export const getMyGroupMessages = async (
 
     const targetGroupIds = groupId ? [groupId] : approvedGroupIds;
 
-    // Step 2: Fetch messages from Message collection
-    const messages = await Message.find({
+    // Step 2: Build MongoDB query
+    const baseQuery: any = {
       groupId: { $in: targetGroupIds },
       messageType: "admin",
-    })
+      ...filter,
+      ...buildSearchFilterQuery(searchFields, searchTerm),
+    };
+
+    const { skip, limit: safeLimit } = getPagination(page, limit);
+    const { projection: mongoProjection } = buildProjection(projection);
+
+    // Step 3: Count and fetch messages
+    const totalCount = await Message.countDocuments(baseQuery);
+
+    const messages = await Message.find(baseQuery)
+      .select(mongoProjection)
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(safeLimit)
       .lean();
 
-    // Step 3: Group messages by groupId
-    const groupedMessages: Record<string, { groupName: string; notifications: any[] }> = {};
+    // Step 4: Group by groupId
+    const groupedMessages: Record<string, { groupId: string; groupName: string; notifications: any[] }> = {};
 
     messages.forEach((msg) => {
       const groupKey = msg.groupId?.toString() || "unknown";
       if (!groupedMessages[groupKey]) {
         groupedMessages[groupKey] = {
+          groupId: groupKey,
           groupName: msg.groupName || "Unknown Group",
           notifications: [],
         };
@@ -191,17 +341,24 @@ export const getMyGroupMessages = async (
     });
 
     const result = groupId
-      ? groupedMessages[groupId.toString()]
-        ? [groupedMessages[groupId.toString()]]
+      ? groupedMessages[groupId]
+        ? [groupedMessages[groupId]]
         : []
       : Object.values(groupedMessages);
 
+    // Step 5: Return response
     req.apiResponse = {
       success: true,
-      message: result.length > 0
-        ? `Messages ${groupId ? 'for group ' + groupId : 'for your groups'} fetched successfully`
-        : "No messages found",
-      data: result,
+      message:
+        result.length > 0
+          ? `Messages ${groupId ? "for group " + groupId : "for your groups"} fetched successfully`
+          : "No messages found",
+      data: {
+        totalCount,
+        page,
+        limit: safeLimit,
+        groups: result,
+      },
     };
 
     next();
@@ -209,7 +366,6 @@ export const getMyGroupMessages = async (
     next(err);
   }
 };
-
 
 // ---------------------------
 // 📤 SEND USER-TO-USER MESSAGE
@@ -277,7 +433,6 @@ export const sendUserMessage = async (
 // ------------------------------------------
 // 📥 GET USER-TO-USER CHAT HISTORY
 // ------------------------------------------
-
 export const getUserChatHistory = async (
   req: Request,
   res: Response,
@@ -285,46 +440,104 @@ export const getUserChatHistory = async (
 ) => {
   try {
     const currentUserId = getUserId(req)?.toString();
-    const filterUserId = req.query.userId?.toString();
 
-    if (!filterUserId) {
-      return res.status(400).json({
+    // ✅ Use generic parser for all query params
+    const {
+      page,
+      limit,
+      searchTerm,
+      searchFields,
+      filter,
+      projection,
+    } = parseStandardQueryParams(req.body);
+
+    const filterUserId = req.body.userId;
+    if (!filterUserId || !mongoose.Types.ObjectId.isValid(filterUserId)) {
+      req.apiResponse = {
         success: false,
-        message: "Missing userId in query. Please specify a userId to view chat history.",
-      });
+        message: 'Invalid or missing userId. Please provide a valid userId to fetch chat history.',
+      };
+      return next();
     }
 
-    // ✅ Mark messages from them to me as read
+    if (filterUserId === currentUserId) {
+      req.apiResponse = {
+        success: false,
+        message: 'You cannot view chat history with yourself.',
+      };
+      return next();
+    }
+
+    const currentUserObjectId = new mongoose.Types.ObjectId(currentUserId);
+    const filterUserObjectId = new mongoose.Types.ObjectId(filterUserId);
+
+    // ✅ Mark messages as read
     await Message.updateMany(
       {
         messageType: 'user',
-        senderId: new mongoose.Types.ObjectId(filterUserId),
-        receiverId: new mongoose.Types.ObjectId(currentUserId),
+        senderId: filterUserObjectId,
+        receiverId: currentUserObjectId,
         isRead: false,
       },
       { $set: { isRead: true } }
     );
 
-    // ✅ Get all messages between current user and target user
-    const messages = await Message.find({
+    // ✅ Base query
+    const baseQuery: any = {
       messageType: 'user',
       $or: [
-        { senderId: currentUserId, receiverId: filterUserId },
-        { senderId: filterUserId, receiverId: currentUserId },
+        { senderId: currentUserObjectId, receiverId: filterUserObjectId },
+        { senderId: filterUserObjectId, receiverId: currentUserObjectId },
       ],
-    }).sort({ timestamp: 1 });
+    };
 
-    const chatHistory = messages.map((msg) => ({
-      message: msg.message,
-      timestamp: msg.timestamp,
-      direction: msg.senderId.toString() === currentUserId ? 'sent' : 'received',
-      isRead: msg.isRead ?? false,
+    // ✅ Add search + filter
+    if (searchTerm) {
+      const searchQuery = buildSearchFilterQuery(searchFields || ['message'], searchTerm);
+      Object.assign(baseQuery, searchQuery);
+    }
+
+    if (filter && typeof filter === 'object') {
+      Object.assign(baseQuery, filter);
+    }
+
+    const totalCount = await Message.countDocuments(baseQuery);
+
+    // ✅ Get skip/limit using utility
+    const { skip } = getPagination(page, limit);
+
+    // ✅ Use projection utility
+    const { projection: projectFields, mode } = buildProjection(projection);
+    if (mode === 'invalid') {
+      req.apiResponse = {
+        success: false,
+        message: 'Invalid projection object. Cannot mix include and exclude fields.',
+      };
+      return next();
+    }
+
+    // ✅ Query messages
+    const messages = await Message.find(baseQuery, projectFields)
+      .sort({ timestamp: 1 })
+      .skip(skip)
+      .limit(limit);
+
+    const formattedMessages = messages.map((msg) => ({
+      ...(msg.message && { message: msg.message }),
+      ...(msg.timestamp && { timestamp: msg.timestamp }),
+      ...(msg.isRead !== undefined && { isRead: msg.isRead }),
+      direction: msg.senderId?.toString() === currentUserId ? 'sent' : 'received',
     }));
 
     req.apiResponse = {
       success: true,
       message: `Chat history with user ${filterUserId}`,
-      data: chatHistory,
+      data: {
+        totalCount,
+        page,
+        limit,
+        messages: formattedMessages,
+      },
     };
 
     next();
@@ -332,7 +545,6 @@ export const getUserChatHistory = async (
     next(err);
   }
 };
-
 
 // ---------------------------
 // 📇 GET MY CONTACTS
@@ -344,51 +556,97 @@ export const getMyContacts = async (
   next: NextFunction
 ) => {
   try {
-    const currentUserId = (req.user as any)._id.toString();
-    const filterUserId = req.query.userId?.toString(); // clicked user ID
+    const currentUserId = getUserId(req)?.toString();
 
-    // 🚀 Case 1: Show chat history with specific user
+    const { userId: filterUserId } = req.body;
+
+    const {
+      page,
+      limit,
+      searchTerm,
+      searchFields,
+      filter,
+      projection,
+    } = parseStandardQueryParams(req.body);
+
+    if (filterUserId && !mongoose.Types.ObjectId.isValid(filterUserId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid userId provided.',
+      });
+    }
+
+    const { skip, limit: safeLimit } = getPagination(page, limit);
+    const { projection: mongoProjection, mode } = buildProjection(projection);
+
+    // ✅ CASE 1: Specific user's chat history
     if (filterUserId) {
-  
-      // 📨 Fetch full conversation
-      const messages = await Message.find({
+      if (filterUserId === currentUserId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot fetch chat history with yourself.',
+        });
+      }
+
+      const query = {
         messageType: 'user',
         $or: [
           { senderId: currentUserId, receiverId: filterUserId },
           { senderId: filterUserId, receiverId: currentUserId },
         ],
-      })
+        ...filter,
+        ...buildSearchFilterQuery(searchFields, searchTerm),
+      };
+
+      const totalCount = await Message.countDocuments(query);
+      const messages = await Message.find(query)
+        .select(mongoProjection)
         .sort({ timestamp: 1 })
+        .skip(skip)
+        .limit(safeLimit)
         .lean();
 
-      const formattedMessages = messages.map((msg) => ({
-        message: msg.message,
-        timestamp: msg.timestamp,
-        direction: msg.senderId.toString() === currentUserId ? 'sent' : 'received',
-        isRead: msg.isRead ?? false,
-      }));
+      const formattedMessages = messages.map((msg: any) => {
+        const formatted: any = {
+          direction: msg.senderId?.toString() === currentUserId ? 'sent' : 'received',
+        };
+        for (const key of Object.keys(msg)) {
+          if (!['senderId', 'receiverId', '_id'].includes(key)) {
+            formatted[key] = msg[key];
+          }
+        }
+        return formatted;
+      });
 
       req.apiResponse = {
         success: true,
         message: `Chat history with user ${filterUserId}`,
         data: {
-          [filterUserId]: formattedMessages,
+          totalCount,
+          page,
+          limit: safeLimit,
+          userId: filterUserId,
+          messages: formattedMessages,
         },
       };
       return next();
     }
 
-    // 🧭 Case 2: Return contact list
-    const messages = await Message.find({
+    // ✅ CASE 2: Get my contacts
+    const messageQuery = {
       messageType: 'user',
       $or: [
         { senderId: currentUserId },
         { receiverId: currentUserId },
       ],
-    }).lean();
+      ...filter,
+      ...buildSearchFilterQuery(searchFields, searchTerm),
+    };
+
+    const allMessages = await Message.find(messageQuery).lean();
 
     const contactIdSet = new Set<string>();
-    messages.forEach((msg) => {
+    allMessages.forEach((msg) => {
       const sender = msg.senderId?.toString();
       const receiver = msg.receiverId?.toString();
       if (sender && sender !== currentUserId) contactIdSet.add(sender);
@@ -397,23 +655,59 @@ export const getMyContacts = async (
 
     const contactIds = Array.from(contactIdSet);
 
-    const users = await User.find({ _id: { $in: contactIds } }).select(
-      '_id first_name last_name'
-    );
+    // 🔄 Fetch users
+    const users = await User.find({
+      _id: { $in: contactIds, $ne: currentUserId },
+    }).select('_id first_name last_name');
 
+    const userMap = new Map(users.map((u) => [u._id.toString(), u]));
+
+    // 🆕 Fetch unread counts from contacts
+    const unreadCounts = await Message.aggregate([
+      {
+        $match: {
+          messageType: 'user',
+          receiverId: new mongoose.Types.ObjectId(currentUserId),
+          senderId: { $in: contactIds.map((id) => new mongoose.Types.ObjectId(id)) },
+          isRead: false,
+        },
+      },
+      {
+        $group: {
+          _id: '$senderId',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const unreadMap = new Map<string, number>();
+    unreadCounts.forEach((entry) => {
+      unreadMap.set(entry._id.toString(), entry.count);
+    });
+
+    // 📦 Build response contacts
     const contacts = contactIds.map((id) => {
-      const user = users.find((u) => u._id.toString() === id);
+      const user = userMap.get(id);
       return {
         userId: id,
         name: user ? `${user.first_name} ${user.last_name}` : 'Unknown User',
+        unreadMessageCount: unreadMap.get(id) || 0,
       };
     });
+
+    const paginatedContacts = contacts.slice(skip, skip + safeLimit);
 
     req.apiResponse = {
       success: true,
       message: 'User contacts retrieved successfully',
-      data: contacts,
+      data: {
+        totalCount: contacts.length,
+        page,
+        limit: safeLimit,
+        contacts: paginatedContacts,
+      },
     };
+
     next();
   } catch (err) {
     next(err);

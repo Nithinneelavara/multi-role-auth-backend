@@ -9,7 +9,7 @@ export interface IGroup extends Document {
 
 const groupSchema = new Schema<IGroup>(
   {
-    groupName: { type: String, required: true },
+    groupName: { type: String, required: true, unique: true, trim: true, },
     maxUsers: { type: Number, required: true },
     members: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     createdBy: { type: Schema.Types.ObjectId, ref: 'Admin', required: true },

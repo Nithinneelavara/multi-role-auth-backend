@@ -8,8 +8,11 @@ export interface IMessage extends Document {
   groupId?: mongoose.Types.ObjectId;
   groupName?: string;
   message: string;
-  timestamp: Date;
   isRead?: boolean; 
+  file?: string;
+  scheduledTime?: Date;
+  isSent?: boolean;
+  timestamp: Date;
 }
 
 const messageSchema = new Schema<IMessage>(
@@ -44,14 +47,24 @@ const messageSchema = new Schema<IMessage>(
       type: String,
       required: true,
     },
-    timestamp: {
-      type: Date,
-      default: Date.now,
-    },
     isRead: {
       type: Boolean,
       default: false, 
     },
+    file: {
+      type: String,
+    },
+    scheduledTime: {
+      type: Date,
+    },
+    isSent: {
+      type: Boolean,
+      default: false,
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now,
+    }
   }
 );
 

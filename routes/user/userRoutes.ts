@@ -9,10 +9,8 @@ import { validateRequest } from '../../middleware/validateRequest';
 import {
   createUser,
   getAllUsers,
-  getUserById,
   updateUser,
-  deleteUser,
-  searchUsers
+  deleteUser
 } from '../../controllers/user/userController';
 
 const router = express.Router();
@@ -111,44 +109,109 @@ router.post(
 
 /**
  * @swagger
- * /api/users:
- *   get:
- *     summary: Get all users
+ * /api/users/get:
+ *   post:
+ *     summary: Get all users or a specific user with optional search, filter, projection, and pagination
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               userId:
+ *                 type: string
+ *                 description: Optional user ID to fetch a specific user
+ *               pagination:
+ *                 type: object
+ *                 properties:
+ *                   page:
+ *                     type: integer
+ *                     default: 1
+ *                   limit:
+ *                     type: integer
+ *                     default: 10
+ *               search:
+ *                 type: object
+ *                 properties:
+ *                   term:
+ *                     type: string
+ *                     example: jayaprakash
+ *                   fields:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                     example: ["userName", "email"]
+ *               filter:
+ *                 type: object
+ *                 description: MongoDB filter object
+ *                 example:
+ *                   name: ramesh
+ *               projection:
+ *                 type: object
+ *                 description: Fields to include (1) or exclude (0)
+ *                 additionalProperties:
+ *                   type: integer
+ *                   enum: [0, 1]
+ *                 example:
+ *                   name: 1
+ *                   email: 1
  *     responses:
  *       200:
- *         description: List of users
+ *         description: User data successfully retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Users retrieved successfully
+ *                 data:
+ *                   oneOf:
+ *                     - type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                         first_name:
+ *                           type: string
+ *                         last_name:
+ *                           type: string
+ *                         email:
+ *                           type: string
+ *                     - type: object
+ *                       properties:
+ *                         totalCount:
+ *                           type: integer
+ *                         page:
+ *                           type: integer
+ *                         limit:
+ *                           type: integer
+ *                         users:
+ *                           type: array
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               _id:
+ *                                 type: string
+ *                               first_name:
+ *                                 type: string
+ *                               last_name:
+ *                                 type: string
+ *                               email:
+ *                                 type: string
  *       401:
- *         description: Unauthorized
+ *         description: Unauthorized - bearer token missing or invalid
  */
-router.get('/', entryLogger, authenticateEither, getAllUsers, exitLogger);
 
-/**
- * @swagger
- * /api/users/{id}:
- *   get:
- *     summary: Get a user by ID
- *     tags: [Users]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         description: The user ID
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: User data
- *       401:
- *         description: Unauthorized
- *       404:
- *         description: User not found
- */
-router.get('/:id', entryLogger, authenticateEither, getUserById, exitLogger);
+router.post('/get', entryLogger, authenticateEither, getAllUsers, exitLogger);
+
 
 /**
  * @swagger
@@ -235,87 +298,6 @@ router.put('/:id', entryLogger, authenticateEither, updateUser, exitLogger);
  *         description: User not found
  */
 router.delete('/:id', entryLogger, authenticateEither, deleteUser, exitLogger);
-
-/**
- * @swagger
- * /api/users/search:
- *   post:
- *     summary: Search, filter, project, and paginate users
- *     tags: [Users]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               pagination:
- *                 type: object
- *                 properties:
- *                   page:
- *                     type: integer
- *                     default: 1
- *                   limit:
- *                     type: integer
- *                     default: 10
- *               search:
- *                 type: object
- *                 properties:
- *                   term:
- *                     type: string
- *                     example: "jayaprakash"
- *                   fields:
- *                     type: array
- *                     items:
- *                       type: string
- *                     example: ["userName", "email"]
- *               filter:
- *                 type: object
- *                 additionalProperties: true
- *                 example:
- *                   name: "ramesh"
- *               projection:
- *                 type: object
- *                 additionalProperties:
- *                   type: integer
- *                 example:
- *                   name: 1
- *                   email: 1
- *     responses:
- *       200:
- *         description: Users retrieved using aggregation
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 code:
- *                   type: integer
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
- *                 data:
- *                   type: object
- *                   properties:
- *                     totalCount:
- *                       type: integer
- *                     page:
- *                       type: integer
- *                     limit:
- *                       type: integer
- *                     totalPages:
- *                       type: integer
- *                     users:
- *                       type: array
- * 
- *       400:
- *         description: Invalid input or no operations enabled
- *       500:
- *         description: Internal server error
- */
-
-router.post('/search', entryLogger, authenticateEither, searchUsers, exitLogger);
 
 
 export default router;
