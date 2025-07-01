@@ -3,6 +3,12 @@ import { Notification } from '../models/db/notification';
 import { MemberNotification } from '../models/db/memberNotification';
 import Group from '../models/db/group';
 import Message from '../models/db/message'; 
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const JWT_SECRET = process.env.JWT_SECRET!;
+
 
 let io: Server;
 
@@ -12,7 +18,28 @@ export const initSocket = (server: any) => {
   });
 
   io.on('connection', (socket) => {
-    const userId = socket.handshake.query.userId as string;
+   // const token = socket.handshake.auth?.token;
+    const token =
+  socket.handshake.auth?.token ||
+  socket.handshake.query?.token;  // fallback to query param
+
+    let userId: string | null = null;
+
+    if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
+      userId = decoded.id;
+    } catch (err) {
+      console.warn('Invalid token. Connection rejected.');
+      socket.disconnect();
+      return;
+    }
+  } else {
+    console.warn('No token provided. Connection rejected.');
+    socket.disconnect();
+    return;
+  }
+
     const memberId = socket.handshake.query.memberId as string;
     const groupId = socket.handshake.query.groupId as string;
 

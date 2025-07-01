@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 import { io } from "socket.io-client";
-import { connectDB } from "./models/connection.js"; // 👈 include `.js` extension
+import { connectDB } from './models/connection.mjs';
+
+await connectDB();
 
 const userSchema = new mongoose.Schema({}, { strict: false });
 const User = mongoose.model("User", userSchema,"users");
@@ -18,10 +20,11 @@ async function main() {
   console.log("Using userId:", userId);
 
   const socket = io("http://localhost:3000", {
-  query: {
-    userId: userId
+  auth: {
+    token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4NWEyNTIwZjk0OTEyMTY0ZDJjNzE2MCIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzUxMzUxMzM1LCJleHAiOjE3NTE0Mzc3MzV9.RqYmdfuF2xn_DS6e8lKkUksBrwxfMH0hDN61b_7YENw"
   }
 });
+
 
 
     socket.on("connect", () => {
