@@ -3,18 +3,16 @@ import { Notification } from '../models/db/notification';
 import { MemberNotification } from '../models/db/memberNotification';
 import Message from '../models/db/message';
 import UnreadCount from '../models/db/unreadCount';
-
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+
 dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 let io: Server;
 
-/**
- * Initializes the Socket.IO server and sets up all events.
- */
+
 export const initSocket = (server: any): Server => {
   io = new Server(server, {
     cors: { origin: '*' },
@@ -113,7 +111,7 @@ export const initSocket = (server: any): Server => {
  * Returns the active Socket.IO instance (for use in controllers).
  */
 export const getSocketInstance = (): Server => {
-  if (!io) throw new Error('❌ Socket.IO server not initialized');
+  if (!io) throw new Error(' Socket.IO server not initialized');
   return io;
 };
 export function sendNotification(
@@ -123,14 +121,14 @@ export function sendNotification(
   role: 'user' | 'member' | 'group' = 'user'
 ): void {
   try {
-    if (!io) throw new Error('❌ Socket.IO server not initialized');
+    if (!io) throw new Error(' Socket.IO server not initialized');
 
     const room = `notification-${targetId}`;
     const event = `notification-${targetId}`;
     const payload = { targetId, message, data };
 
     io.to(room).emit(event, payload);
-    console.log(`✅ ${role} notification sent to ${room}`);
+    console.log(` ${role} notification sent to ${room}`);
 
     // 💾 Save notification
     if (role === 'user' || role === 'member') {
@@ -138,12 +136,12 @@ export function sendNotification(
       const newNotification = new NotificationModel({ userId: targetId, message, data });
 
       newNotification.save().catch((err) => {
-        console.error(`❌ Error saving ${role} notification:`, err);
+        console.error(` Error saving ${role} notification:`, err);
       });
     } else if (role === 'group') {
-      console.log('ℹ️ Group notification emitted only (not saved again)');
+      console.log(' Group notification emitted only (not saved again)');
     }
   } catch (error) {
-    console.error('❌ Error in sendNotification:', error);
+    console.error(' Error in sendNotification:', error);
   }
 }
