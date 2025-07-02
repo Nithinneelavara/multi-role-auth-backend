@@ -8,7 +8,7 @@ export interface IOtpToken extends Document {
 
 const otpTokenSchema: Schema = new Schema({
   email: { type: String, required: true },
-  otp: { type: String, required: true }, // Hashed OTP
+  otp: { type: String, required: true },
   expiresAt: { type: Date, required: true },
 });
 

@@ -17,7 +17,6 @@ function getUserId(req: Request): string {
 }
 
 // -------------------- GET AVAILABLE GROUPS --------------------
-
 export const getAvailableGroups = async (
   req: Request,
   res: Response,
@@ -45,7 +44,7 @@ export const getAvailableGroups = async (
     const { skip, limit: safeLimit } = getPagination(page, limit);
     const { projection: mongoProjection } = buildProjection(projection);
 
-    // ✅ CASE 1: groupId provided → return only that group (if not joined)
+    // CASE 1: groupId provided → return only that group (if not joined)
     if (groupId) {
       if (joinedGroupIds.includes(groupId)) {
         req.apiResponse = {
@@ -84,7 +83,7 @@ export const getAvailableGroups = async (
       return next();
     }
 
-    // ✅ CASE 2: No groupId → return all available groups
+    // CASE 2: No groupId → return all available groups
     const baseQuery: any = {
       _id: { $nin: joinedGroupIds },
       ...filter,
@@ -261,7 +260,6 @@ export const getApprovedGroupsForUser = async (
 };
 
 // -------------------- GET MY GROUP MESSAGES (NEW) --------------------
-
 export const getMyGroupMessages = async (
   req: Request,
   res: Response,
@@ -300,7 +298,6 @@ export const getMyGroupMessages = async (
 
     const targetGroupIds = groupId ? [groupId] : approvedGroupIds;
 
-    // Step 2: Build MongoDB query
     const baseQuery: any = {
       groupId: { $in: targetGroupIds },
       messageType: "admin",
@@ -311,7 +308,6 @@ export const getMyGroupMessages = async (
     const { skip, limit: safeLimit } = getPagination(page, limit);
     const { projection: mongoProjection } = buildProjection(projection);
 
-    // Step 3: Count and fetch messages
     const totalCount = await Message.countDocuments(baseQuery);
 
     const messages = await Message.find(baseQuery)
@@ -321,7 +317,6 @@ export const getMyGroupMessages = async (
       .limit(safeLimit)
       .lean();
 
-    // Step 4: Group by groupId
     const groupedMessages: Record<string, { groupId: string; groupName: string; notifications: any[] }> = {};
 
     messages.forEach((msg) => {
@@ -346,7 +341,6 @@ export const getMyGroupMessages = async (
         : []
       : Object.values(groupedMessages);
 
-    // Step 5: Return response
     req.apiResponse = {
       success: true,
       message:
@@ -367,10 +361,7 @@ export const getMyGroupMessages = async (
   }
 };
 
-// ---------------------------
-// 📤 SEND USER-TO-USER MESSAGE
-// ---------------------------
-
+//  SEND USER-TO-USER MESSAGE
 export const sendUserMessage = async (
   req: Request,
   res: Response,
@@ -406,7 +397,6 @@ export const sendUserMessage = async (
       timestamp: new Date(),
     });
 
-    // Optional: Real-time notification
     sendNotification(
       receiverId,
       message,
@@ -430,9 +420,7 @@ export const sendUserMessage = async (
 };
 
 
-// ------------------------------------------
-// 📥 GET USER-TO-USER CHAT HISTORY
-// ------------------------------------------
+//  GET USER-TO-USER CHAT HISTORY
 export const getUserChatHistory = async (
   req: Request,
   res: Response,
@@ -471,7 +459,7 @@ export const getUserChatHistory = async (
     const currentUserObjectId = new mongoose.Types.ObjectId(currentUserId);
     const filterUserObjectId = new mongoose.Types.ObjectId(filterUserId);
 
-    // ✅ Mark messages as read
+    // Mark messages as read
     await Message.updateMany(
       {
         messageType: 'user',
@@ -482,7 +470,6 @@ export const getUserChatHistory = async (
       { $set: { isRead: true } }
     );
 
-    // ✅ Base query
     const baseQuery: any = {
       messageType: 'user',
       $or: [
@@ -491,7 +478,6 @@ export const getUserChatHistory = async (
       ],
     };
 
-    // ✅ Add search + filter
     if (searchTerm) {
       const searchQuery = buildSearchFilterQuery(searchFields || ['message'], searchTerm);
       Object.assign(baseQuery, searchQuery);
@@ -503,10 +489,8 @@ export const getUserChatHistory = async (
 
     const totalCount = await Message.countDocuments(baseQuery);
 
-    // ✅ Get skip/limit using utility
     const { skip } = getPagination(page, limit);
 
-    // ✅ Use projection utility
     const { projection: projectFields, mode } = buildProjection(projection);
     if (mode === 'invalid') {
       req.apiResponse = {
@@ -516,7 +500,6 @@ export const getUserChatHistory = async (
       return next();
     }
 
-    // ✅ Query messages
     const messages = await Message.find(baseQuery, projectFields)
       .sort({ timestamp: 1 })
       .skip(skip)
@@ -546,9 +529,7 @@ export const getUserChatHistory = async (
   }
 };
 
-// ---------------------------
-// 📇 GET MY CONTACTS
-// ---------------------------
+// GET MY CONTACTS
 
 export const getMyContacts = async (
   req: Request,
@@ -579,7 +560,7 @@ export const getMyContacts = async (
     const { skip, limit: safeLimit } = getPagination(page, limit);
     const { projection: mongoProjection, mode } = buildProjection(projection);
 
-    // ✅ CASE 1: Specific user's chat history
+    // CASE 1: Specific user's chat history
     if (filterUserId) {
       if (filterUserId === currentUserId) {
         return res.status(400).json({
@@ -632,7 +613,7 @@ export const getMyContacts = async (
       return next();
     }
 
-    // ✅ CASE 2: Get my contacts
+    //  CASE 2: Get my contacts
     const messageQuery = {
       messageType: 'user',
       $or: [
@@ -655,14 +636,14 @@ export const getMyContacts = async (
 
     const contactIds = Array.from(contactIdSet);
 
-    // 🔄 Fetch users
+    //  Fetch users
     const users = await User.find({
       _id: { $in: contactIds, $ne: currentUserId },
     }).select('_id first_name last_name');
 
     const userMap = new Map(users.map((u) => [u._id.toString(), u]));
 
-    // 🆕 Fetch unread counts from contacts
+    //  Fetch unread counts from contacts
     const unreadCounts = await Message.aggregate([
       {
         $match: {
@@ -685,7 +666,7 @@ export const getMyContacts = async (
       unreadMap.set(entry._id.toString(), entry.count);
     });
 
-    // 📦 Build response contacts
+    //  Build response contacts
     const contacts = contactIds.map((id) => {
       const user = userMap.get(id);
       return {

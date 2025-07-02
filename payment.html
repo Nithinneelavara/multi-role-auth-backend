@@ -7,12 +7,10 @@
 <body>
   <h2>Pay Membership Fee</h2>
   <button id="pay">Pay ₹200</button>
-
   <script>
     document.getElementById('pay').onclick = async function () {
       const token = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4NTBmMDA1NDdkNDAyZWM5MGJjOGNhMSIsInJvbGUiOiJtZW1iZXIiLCJpYXQiOjE3NTEzNDIxMTIsImV4cCI6MTc1MTQyODUxMn0.hQkWdRoUH6yJGzrB004NKEBrcuHPpQ2a-sebQqweUPo';  
 
-      // Step 1: Create order from backend
       const res = await fetch('http://localhost:3000/api/member/order', {
         method: 'POST',
         headers: {
@@ -29,7 +27,6 @@
 
       const { order } = data;
 
-      // Step 2: Configure Razorpay Checkout
       const options = {
         key: 'rzp_test_MCCgKLHdh0DAk9', // Your Razorpay Test Key
         amount: order.amount,
@@ -38,7 +35,7 @@
         description: 'Membership Fee',
         order_id: order.id,
         handler: async function (response) {
-          //  Step 3: Log and alert verification values
+
           console.log("Razorpay Payment Response:", response);
           alert(
             ` Payment Details:\n\n` +

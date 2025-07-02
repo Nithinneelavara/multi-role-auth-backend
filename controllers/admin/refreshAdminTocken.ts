@@ -24,14 +24,12 @@ export const refreshAdminToken = async (
       return;
     }
 
-    // Check refresh token existence in DB
     const tokenDoc = await RefreshToken.findOne({ token: refreshToken, userType: 'admin' });
     if (!tokenDoc) {
       res.status(403).json({ success: false, message: 'Invalid refresh token' });
       return;
     }
-
-    // Verify refresh token
+    
     jwt.verify(refreshToken, JWT_SECRET, async (err: any, decoded: any) => {
       if (err || !decoded?.id) {
         return res.status(403).json({ success: false, message: 'Invalid or expired refresh token' });
@@ -41,11 +39,9 @@ export const refreshAdminToken = async (
         return res.status(403).json({ success: false, message: 'Token does not belong to this admin' });
       }
 
-      // Issue new access token
       const newAccessToken = jwt.sign({ id: decoded.id, role: 'admin' }, JWT_SECRET, { expiresIn: '1d' });
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-      // Replace old access token
       await AccessToken.deleteMany({ userId: decoded.id, userType: 'admin' });
 
       await AccessToken.create({
@@ -54,7 +50,6 @@ export const refreshAdminToken = async (
         token: newAccessToken,
         expiresAt,
       });
-
       // Set new token in cookie
       res.cookie('adminToken', newAccessToken, {
         httpOnly: true,

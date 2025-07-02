@@ -14,7 +14,6 @@ import { exitLogger } from '../../middleware/exitpoint';
 
 const router = express.Router();
 
-// All routes protected using passport JWT
 const authenticateEither = passport.authenticate(['admin','user-bearer'] as const, { session: false });
 
 /**
@@ -98,8 +97,6 @@ const authenticateEither = passport.authenticate(['admin','user-bearer'] as cons
  *                       groupName: "Warriors"
  *                       maxUsers: 10
  */
-
-
 router.post('/groups', entryLogger, authenticateEither, getAvailableGroups, exitLogger);
 
 /**
@@ -209,7 +206,6 @@ router.post('/groups/join', entryLogger, authenticateEither, sendJoinRequest, ex
  *                       groupName: "Champions"
  *                       maxUsers: 10
  */
-
 router.post('/groups/approved', entryLogger, authenticateEither, getApprovedGroupsForUser, exitLogger);
 
 /**
@@ -316,8 +312,6 @@ router.post('/groups/approved', entryLogger, authenticateEither, getApprovedGrou
  *                                   format: date-time
  *                                   example: "2025-06-21T10:15:30.000Z"
  */
-
-
 router.post('/groups/messages', entryLogger, authenticateEither, getMyGroupMessages, exitLogger);
 
 /**
@@ -460,8 +454,6 @@ router.post('/messages/send', entryLogger, authenticateEither, sendUserMessage, 
  *       500:
  *         description: Internal server error
  */
-
-
 router.post('/messages/history', entryLogger, authenticateEither, getUserChatHistory, exitLogger);
 
 
@@ -611,8 +603,6 @@ router.post('/messages/history', entryLogger, authenticateEither, getUserChatHis
  *                                 type: string
  *                                 example: "John Doe"
  */
-
 router.post('/messages/contacts', entryLogger, authenticateEither, getMyContacts, exitLogger);
-
 
 export default router;

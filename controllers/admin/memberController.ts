@@ -10,9 +10,6 @@ const JWT_SECRET = process.env.JWT_SECRET!;
 
 
 // ------------------ MEMBER CRUD OPERATIONS ------------------
-
-
-
 export const createMember = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { name, email, password, address } = req.body;
@@ -40,7 +37,6 @@ export const createMember = async (req: Request, res: Response, next: NextFuncti
 };
 
 //------------------ GETMEMBERS OPERATIONS ------------------
-
 export const getMembers = async (
   req: Request,
   res: Response,
@@ -74,7 +70,6 @@ export const getMembers = async (
     if (mode === 'invalid') {
       throw new Error('Projection cannot mix inclusion and exclusion.');
     }
-
     const totalCount = await Member.countDocuments(dbFilter);
     const members = await Member.find(dbFilter, cleanProjection)
       .sort({ createdAt: -1 })
@@ -105,7 +100,6 @@ export const getMembers = async (
 };
 
 //------------------ updateMember OPERATIONS ------------------
-
 export const updateMember = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const member = await Member.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -122,7 +116,6 @@ export const updateMember = async (req: Request, res: Response, next: NextFuncti
 
 
 //------------------ deleteMember OPERATIONS ------------------
-
 export const deleteMember = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const member = await Member.findByIdAndDelete(req.params.id);

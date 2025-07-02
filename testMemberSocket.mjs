@@ -1,7 +1,9 @@
 import mongoose from "mongoose";
 import { io } from "socket.io-client";
 import { connectDB } from "./models/connection.js"; // 👈 include .js extension
+import dotenv from 'dotenv';
 
+dotenv.config();
 // Define a flexible schema for Member collection
 const memberSchema = new mongoose.Schema({}, { strict: false });
 const Member = mongoose.model("Member", memberSchema, "members"); // 👈 collection: members
@@ -19,11 +21,18 @@ async function main() {
   const memberId = member._id.toString(); // use _id as memberId
   console.log("Using memberId:", memberId);
 
-  const socket = io("http://localhost:3000", {
-    query: {
-      userId: memberId // ✅ same key as user, to match Socket.IO logic
-    }
-  });
+ // ✅ NEW version with token
+ const token = jwt.sign({ id: memberId }, process.env.JWT_SECRET);
+
+
+const socket = io("http://localhost:3000", {
+  auth: {
+    token  // send JWT in `auth.token`
+  },
+  query: {
+    memberId  // also send for room naming
+  }
+});
 
   socket.on("connect", () => {
     console.log(`Joined notification room for memberId: ${memberId}`);

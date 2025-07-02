@@ -9,10 +9,6 @@ export interface ParsedQueryParams {
   projection: Record<string, 1 | 0>;
 }
 
-/**
- * ✅ Parse query parameters from the request query string (used for GET requests).
- * Example: ?page=1&limit=10&search=name&fields=name:1,email:1
- */
 export function parseQueryParams(query: ParsedQs): ParsedQueryParams {
   const page = parseInt(query.page as string, 10) || 1;
   const limit = parseInt(query.limit as string, 10) || 10;
@@ -29,10 +25,6 @@ export function parseQueryParams(query: ParsedQs): ParsedQueryParams {
   return { page, limit, search, projection };
 }
 
-/**
- * ✅ Parse standardized query params from nested POST request body.
- * Supports: pagination, search, filter, projection.
- */
 export function parseStandardQueryParams(body: any): {
   page: number;
   limit: number;
@@ -52,7 +44,7 @@ export function parseStandardQueryParams(body: any): {
   const searchTerm = typeof search.term === 'string' ? search.term.trim() : '';
   const searchFields = Array.isArray(search.fields) && search.fields.length > 0
     ? search.fields
-    : ['userName', 'email']; // Default fallback fields
+    : ['userName', 'email'];
 
   return {
     page,
@@ -64,15 +56,11 @@ export function parseStandardQueryParams(body: any): {
   };
 }
 
-/**
- * ✅ Build a MongoDB case-insensitive $regex search filter across multiple fields and terms.
- * Supports: "hi ok" or "hi,ok" on fields like ['message']
- */
 export function buildSearchFilterQuery(fields: string[], term: string) {
   if (!term || !fields || fields.length === 0) return {};
 
   const terms = term
-    .split(/[,\s]+/) // Split on commas or whitespace
+    .split(/[,\s]+/)
     .map((t) => t.trim())
     .filter((t) => t.length > 0);
 
@@ -87,9 +75,6 @@ export function buildSearchFilterQuery(fields: string[], term: string) {
   return orConditions.length > 0 ? { $or: orConditions } : {};
 }
 
-/**
- * ✅ Fallback search on populated document fields (e.g., userId.userName).
- */
 export function filterPopulatedDocs<T extends Record<string, any>>(
   docs: T[],
   search: string,
@@ -116,9 +101,6 @@ export function filterPopulatedDocs<T extends Record<string, any>>(
   );
 }
 
-/**
- * ✅ Generate skip and limit values for MongoDB pagination.
- */
 export function getPagination(page: number, limit: number) {
   const safePage = Math.max(1, page);
   const safeLimit = Math.max(1, limit);
@@ -128,10 +110,6 @@ export function getPagination(page: number, limit: number) {
   };
 }
 
-/**
- * ✅ Build MongoDB projection and determine whether it’s inclusion or exclusion.
- * Ensures projection is not mixed (all 1s or all 0s only).
- */
 export function buildProjection(
   projectionObj: Record<string, 1 | 0>
 ): { projection: Record<string, 1 | 0>; mode: ProjectionMode } {

@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 
 export const entryLogger = (req: Request, _res: Response, next: NextFunction) => {
-  if ((req as any)._entryLogged) return next(); // prevent double logging
+  if ((req as any)._entryLogged) return next(); 
 
   const txtId = uuidv4();
   const startTime = Date.now();

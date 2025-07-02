@@ -19,7 +19,6 @@ const s3 = new S3Client({
 
 const BUCKET = process.env.S3_BUCKET_NAME!;
 
-// Generate signed URL for uploading (PUT)
 export const getUploadUrl = async (filename: string, fileType: string) => {
   const command = new PutObjectCommand({
     Bucket: BUCKET,
@@ -31,7 +30,6 @@ export const getUploadUrl = async (filename: string, fileType: string) => {
   return url;
 };
 
-// Generate signed URL for downloading (GET)
 export const getDownloadUrl = async (filename: string) => {
   const command = new GetObjectCommand({
     Bucket: BUCKET,

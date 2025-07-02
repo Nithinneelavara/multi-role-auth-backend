@@ -4,8 +4,6 @@ import { entryLogger } from '../../middleware/entrypoint';
 import { exitLogger } from '../../middleware/exitpoint';
 import { userValidationRules } from '../../validators/userValidator';
 import { validateRequest } from '../../middleware/validateRequest';
-
-
 import {
   createUser,
   getAllUsers,
@@ -22,12 +20,7 @@ const router = express.Router();
  *   description: User management endpoints
  */
 
-//
-// protectAdmin now types err, user, info as any.
-//
-
 const authenticateEither = passport.authenticate(['admin','member-bearer'] as const, { session: false });
-
 
 /**
  * @swagger
@@ -209,7 +202,6 @@ router.post(
  *       401:
  *         description: Unauthorized - bearer token missing or invalid
  */
-
 router.post('/get', entryLogger, authenticateEither, getAllUsers, exitLogger);
 
 
@@ -298,6 +290,5 @@ router.put('/:id', entryLogger, authenticateEither, updateUser, exitLogger);
  *         description: User not found
  */
 router.delete('/:id', entryLogger, authenticateEither, deleteUser, exitLogger);
-
 
 export default router;
