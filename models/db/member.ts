@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
+//  Define a TypeScript interface for member fields
 export interface MemberDocument extends Document {
   name: string;
   email: string;
@@ -8,7 +9,7 @@ export interface MemberDocument extends Document {
   date_joined: Date;
 }
 
-
+//  Define schema
 const memberSchema: Schema<MemberDocument> = new Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
@@ -20,4 +21,4 @@ const memberSchema: Schema<MemberDocument> = new Schema({
 const Member = mongoose.model<MemberDocument>('Member', memberSchema);
 export default Member;
 
-export { Member };
+export { Member };

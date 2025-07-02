@@ -5,7 +5,7 @@ const memberNotificationSchema = new mongoose.Schema(
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
-      ref: 'Member', // this should match your member model name
+      ref: 'Member',
     },
     message: {
       type: String,

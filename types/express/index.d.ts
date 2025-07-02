@@ -4,7 +4,7 @@ import { ApiResponse } from '../../utils/apiResponse';
 import { JwtPayload } from 'jsonwebtoken';
 import { AdminDocument } from '../../models/db/admin';
 import { UserDocument } from '../../models/db/user';
-import { MemberDocument } from '../../models/db/member'; // Add this if needed
+import { MemberDocument } from '../../models/db/member';
 
 declare global {
   namespace Express {
