@@ -25,6 +25,5 @@ export const sendOtpEmail = async (to: string, otp: string) => {
       <p>If you did not request this, please ignore this email.</p>
     `,
   };
-
   await transporter.sendMail(mailOptions);
 };

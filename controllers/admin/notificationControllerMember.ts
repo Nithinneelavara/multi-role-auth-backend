@@ -10,14 +10,13 @@ export const notifyMember = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'memberId and message are required' });
     }
 
-    // ✅ Save notification to database
     await MemberNotification.create({
       userId: memberId,
       message,
       data: data || {},
     });
 
-    // ✅ Send real-time notification via Socket.IO
+    // Send real-time notification via Socket.IO
     sendNotification(memberId, message, data || {});
 
     return res.status(200).json({ message: 'Notification sent and saved successfully' });

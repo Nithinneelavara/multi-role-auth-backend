@@ -19,7 +19,6 @@ function getUserId(req: Request): string {
 }
 
 // -------------------- GET AVAILABLE GROUPS --------------------
-
 export const getAvailableGroups = async (
   req: Request,
   res: Response,
@@ -47,7 +46,7 @@ export const getAvailableGroups = async (
     const { skip, limit: safeLimit } = getPagination(page, limit);
     const { projection: mongoProjection } = buildProjection(projection);
 
-    // ✅ CASE 1: groupId provided → return only that group (if not joined)
+    // CASE 1: groupId provided → return only that group (if not joined)
     if (groupId) {
       if (joinedGroupIds.includes(groupId)) {
         req.apiResponse = {
@@ -86,7 +85,7 @@ export const getAvailableGroups = async (
       return next();
     }
 
-    // ✅ CASE 2: No groupId → return all available groups
+    // CASE 2: No groupId → return all available groups
     const baseQuery: any = {
       _id: { $nin: joinedGroupIds },
       ...filter,
@@ -263,7 +262,6 @@ export const getApprovedGroupsForUser = async (
 };
 
 // -------------------- GET MY GROUP MESSAGES (NEW) --------------------
-
 export const getMyGroupMessages = async (
   req: Request,
   res: Response,

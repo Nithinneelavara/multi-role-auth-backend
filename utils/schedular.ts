@@ -11,7 +11,6 @@ import timezone from 'dayjs/plugin/timezone';
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-
 dotenv.config();
 
 const generateS3Url = (fileName: string): string => {
@@ -21,13 +20,10 @@ const generateS3Url = (fileName: string): string => {
 };
 
 export const startMessageScheduler = () => {
-  // Run every minute
   cron.schedule('* * * * *', async () => {
     try {
       const now = dayjs().tz("Asia/Kolkata").toDate();
 
-
-      // Find messages that should now be sent
       const pendingMessages = await Message.find({
         scheduledTime: { $lte: now },
         isSent: false,
@@ -42,7 +38,7 @@ export const startMessageScheduler = () => {
           file: msg.file ? generateS3Url(msg.file) : '',
         };
 
-        // 👥 If it's a group message
+        //  If it's a group message
         if (msg.groupId) {
           const group = await Group.findById(msg.groupId);
           if (!group) {
@@ -63,13 +59,12 @@ export const startMessageScheduler = () => {
           console.log(`[Scheduler] Sent to group room: group-${group._id}`);
         }
 
-        // 👤 If it's a direct user-to-user message
+        //  If it's a direct user-to-user message
         else if (msg.receiverId) {
           sendNotification(msg.receiverId.toString(), msg.message, payload, 'user');
           console.log(`[Scheduler] Sent to receiver ${msg.receiverId}`);
         }
 
-        // ✅ Mark message as sent
         msg.isSent = true;
         await msg.save();
         console.log(`[Scheduler] Marked as sent: ${msg._id}`);

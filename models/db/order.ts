@@ -5,14 +5,14 @@ export interface IOrder extends Document {
   memberId: mongoose.Types.ObjectId;
   orderId: string;
   isPaid: boolean;
-  status?: string; // ✅ add this
+  status?: string;
 }
 
 const orderSchema = new Schema<IOrder>({
   memberId: { type: Schema.Types.ObjectId, ref: 'Member', required: true },
   orderId: { type: String, required: true },
   isPaid: { type: Boolean, default: false },
-  status: { type: String }, // ✅ add this
+  status: { type: String }, 
 }, { timestamps: true });
 
 export default mongoose.model<IOrder>('Order', orderSchema);

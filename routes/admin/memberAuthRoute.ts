@@ -72,7 +72,6 @@ const router = express.Router();
  *                   type: string
  *                   example: Invalid email or password
  */
-
 router.post('/login', entryLogger, LoginValidation, validateRequest, memberLogin, exitLogger);
 
 /**
@@ -122,7 +121,6 @@ router.post('/login', entryLogger, LoginValidation, validateRequest, memberLogin
  *                   type: string
  *                   example: Error during logout
  */
-
 router.post('/logout', entryLogger, memberLogout, exitLogger);
 
 /**

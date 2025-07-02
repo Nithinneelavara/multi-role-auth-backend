@@ -52,7 +52,6 @@ export const notifyGroupMembersViaSocket = async (
       };
       return next();
     }
-
     let totalNotified = 0;
 
     for (const group of groups) {
@@ -93,7 +92,6 @@ export const notifyGroupMembersViaSocket = async (
 
       totalNotified += approvedMembers.length;
     }
-
     req.apiResponse = {
       success: true,
       message: `Socket notification sent to ${totalNotified} approved users.`,
@@ -105,7 +103,6 @@ export const notifyGroupMembersViaSocket = async (
 };
 
 // Send notification to a specific group
-
 export const notifySpecificGroup = async (
   req: Request,
   res: Response,

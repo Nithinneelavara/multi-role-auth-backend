@@ -1,3 +1,4 @@
+//controllers\user\notificationController.ts
 import { Request, Response } from 'express';
 import { sendNotification } from '../../socket/index';
 import { Notification } from '../../models/db/notification';
@@ -16,7 +17,6 @@ export const notifyUser = (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Failed to send notification' });
   }
 };
-
 
 export const getUserNotifications = async (req: Request, res: Response) => {
   try {

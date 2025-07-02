@@ -173,8 +173,6 @@ router.post(
  *       500:
  *         description: Internal server error
  */
-
-
 router.post('/get', entryLogger, protectAdmin, getMembers, exitLogger);
 
 

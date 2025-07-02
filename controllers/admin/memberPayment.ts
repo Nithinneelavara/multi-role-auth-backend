@@ -46,6 +46,6 @@ export const verifyOrderMember = async (req: Request, res: Response) => {
     res.status(200).json({ success: true, message: 'Payment verified successfully' });
   } catch (err) {
     console.error('Error verifying payment:', err);
-    res.status(500).json({ success: false, message: 'Failed to verify payment' });
-  }
+    res.status(500).json({ success: false, message: 'Failed to verify payment' });
+  }
 };

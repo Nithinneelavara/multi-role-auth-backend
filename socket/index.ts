@@ -1,9 +1,14 @@
 import { Server } from 'socket.io';
 import { Notification } from '../models/db/notification';
 import { MemberNotification } from '../models/db/memberNotification';
-import Group from '../models/db/group';
 import Message from '../models/db/message';
 import UnreadCount from '../models/db/unreadCount';
+
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 let io: Server;
 
@@ -16,10 +21,28 @@ export const initSocket = (server: any): Server => {
   });
 
   io.on('connection', (socket) => {
-    const userId = socket.handshake.query.userId as string;
+    const token =
+      socket.handshake.auth?.token ||
+      socket.handshake.query?.token;  
+    let userId: string | null = null;
+
+    if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
+      userId = decoded.id;
+    } catch (err) {
+      console.warn('Invalid token. Connection rejected.');
+      socket.disconnect();
+      return;
+    }
+  } else {
+    console.warn('No token provided. Connection rejected.');
+    socket.disconnect();
+    return;
+  }
+
     const memberId = socket.handshake.query.memberId as string;
     const groupId = socket.handshake.query.groupId as string;
-
     const finalId = userId || memberId || groupId;
 
     if (finalId) {
@@ -33,6 +56,7 @@ export const initSocket = (server: any): Server => {
 
     // ✅ USER-TO-USER MESSAGE HANDLING
     socket.on('send-user-message', async ({ toUserId, message }) => {
+
       const fromUserId = socket.handshake.query.userId as string;
 
       if (!fromUserId || !toUserId || !message) {
@@ -92,10 +116,6 @@ export const getSocketInstance = (): Server => {
   if (!io) throw new Error('❌ Socket.IO server not initialized');
   return io;
 };
-
-/**
- * Sends a generic notification to a user, member, or group.
- */
 export function sendNotification(
   targetId: string,
   message: string,

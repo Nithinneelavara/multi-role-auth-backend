@@ -1,5 +1,4 @@
 //project\services\payment\razorpay.ts
-
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
@@ -17,7 +16,6 @@ export const createRazorpayOrder = async (amount: number) => {
     currency: 'INR',
     receipt: `receipt_order_${Date.now()}`,
   };
-
   return await razorpayInstance.orders.create(options);
 };
 

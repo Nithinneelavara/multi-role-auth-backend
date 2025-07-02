@@ -14,8 +14,6 @@ const authenticateEither = passport.authenticate(
   { session: false }
 );
 
-// USER LOGIN ROUTE
-
 /**
  * @swagger
  * /api/auth/login:
@@ -43,7 +41,6 @@ const authenticateEither = passport.authenticate(
  *       401:
  *         description: Invalid credentials
  */
-
 router.post('/login', entryLogger, LoginValidation, validateRequest, userLogin, exitLogger);
 
 // USER LOGOUT ROUTE
@@ -62,7 +59,6 @@ router.post('/login', entryLogger, LoginValidation, validateRequest, userLogin, 
  *       500:
  *         description: Error during logout
  */
-
 router.post('/logout', entryLogger, userLogout, exitLogger);
 
 /**
@@ -106,7 +102,6 @@ router.post('/logout', entryLogger, userLogout, exitLogger);
  *       500:
  *         description: Server error
  */
-
 router.get('/me',entryLogger, authenticateEither, getUserData, exitLogger);
 
 /**
@@ -135,7 +130,6 @@ router.get('/me',entryLogger, authenticateEither, getUserData, exitLogger);
  *       403:
  *         description: Invalid or expired refresh token
  */
-
 router.post('/refresh', entryLogger, refreshUserToken, exitLogger);
 
 /**

@@ -1,13 +1,10 @@
 //project\routes\admin\memberPaymentRoutes.ts
-
 import express from 'express';
 import { createOrderMember, verifyOrderMember } from '../../controllers/admin/memberPayment';
 import passport from '../../middleware/passport';
 import { handleRazorpayWebhook } from '../../controllers/admin/webhookController'
 
 const protectMember = passport.authenticate('member-bearer', { session: false });
-
-console.log("webhook function is",typeof(handleRazorpayWebhook))
 
 const router = express.Router();
 

@@ -18,8 +18,6 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
     }
 
     const { userName, email, password, ...rest } = req.body;
-
-    // Hash the password before saving
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await User.create({
@@ -91,7 +89,6 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
       return next();
     }
 
-    // Handle search, pagination, and projection
     const {
       page,
       limit,
