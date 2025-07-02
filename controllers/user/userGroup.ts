@@ -2,11 +2,13 @@ import { Request, Response, NextFunction } from "express";
 import Group from "../../models/db/group";
 import Message from "../../models/db/message";
 import JoinRequest from "../../models/db/joinRequest";
-import { sendNotification } from "../../socket";
+import { sendNotification, getSocketInstance } from "../../socket";
 import User from '../../models/db/user';
 import mongoose from "mongoose";
 import {  parseStandardQueryParams, buildSearchFilterQuery, getPagination, buildProjection, } from "../generic/utils";
-
+import UnreadCount from '../../models/db/unreadCount';
+import { encrypt } from "../../utils/encryption";
+import { decrypt } from '../../utils/encryption';
 
 // ----------- Helper Function for Safe User ID Extraction -----------
 function getUserId(req: Request): string {
@@ -278,7 +280,6 @@ export const getMyGroupMessages = async (
       projection,
     } = parseStandardQueryParams(req.body);
 
-    // Step 1: Get approved group IDs for this user
     const approvedRequests = await JoinRequest.find({
       userId,
       status: "approved",
@@ -286,7 +287,6 @@ export const getMyGroupMessages = async (
 
     const approvedGroupIds = approvedRequests.map((r) => r.groupId.toString());
 
-    // Reject if groupId is not approved
     if (groupId && !approvedGroupIds.includes(groupId)) {
       req.apiResponse = {
         success: false,
@@ -306,7 +306,16 @@ export const getMyGroupMessages = async (
     };
 
     const { skip, limit: safeLimit } = getPagination(page, limit);
-    const { projection: mongoProjection } = buildProjection(projection);
+    const { projection: mongoProjection, mode } = buildProjection(projection);
+
+    // ✅ Always include message & iv for decryption if not explicitly excluded
+    if (mode !== 'exclude') {
+      mongoProjection.message = 1;
+      mongoProjection.iv = 1;
+      mongoProjection.timestamp = 1;
+      mongoProjection.groupId = 1;
+      mongoProjection.groupName = 1;
+    }
 
     const totalCount = await Message.countDocuments(baseQuery);
 
@@ -329,8 +338,17 @@ export const getMyGroupMessages = async (
         };
       }
 
+      let decryptedMessage = '🔐 Unable to decrypt';
+      try {
+        if (msg.message && msg.iv) {
+          decryptedMessage = decrypt(msg.message, msg.iv);
+        }
+      } catch (_) {
+        // ignore decryption failure
+      }
+
       groupedMessages[groupKey].notifications.push({
-        message: msg.message,
+        message: decryptedMessage,
         timestamp: msg.timestamp,
       });
     });
@@ -361,7 +379,9 @@ export const getMyGroupMessages = async (
   }
 };
 
-//  SEND USER-TO-USER MESSAGE
+// ---------------------------
+// 📤 SEND USER-TO-USER MESSAGE
+// ---------------------------
 export const sendUserMessage = async (
   req: Request,
   res: Response,
@@ -374,8 +394,7 @@ export const sendUserMessage = async (
     if (!receiverId || !message || typeof message !== "string") {
       req.apiResponse = {
         success: false,
-        message:
-          "receiverId and message (in request body) are required and must be valid",
+        message: "receiverId and message are required and must be valid",
       };
       return next();
     }
@@ -388,13 +407,33 @@ export const sendUserMessage = async (
       return next();
     }
 
+    // 🔐 Encrypt message before saving
+    const { encryptedData, iv } = encrypt(message);
+
     const savedMessage = await Message.create({
       messageType: "user",
       senderId,
       senderModel: "User",
       receiverId,
-      message,
+      message: encryptedData, // encrypted message
+      iv,                     // store IV with the message
+      isRead: false,
       timestamp: new Date(),
+    });
+
+    await UnreadCount.findOneAndUpdate(
+      { userId: receiverId, contactId: senderId },
+      { $inc: { count: 1 } },
+      { upsert: true, new: true }
+    );
+
+    const io = getSocketInstance();
+    io.to(`notification-${receiverId}`).emit(`direct-message-${receiverId}`, {
+      fromUserId: senderId,
+      toUserId: receiverId,
+      message, // original plain text for real-time use
+      timestamp: savedMessage.timestamp,
+      messageId: savedMessage._id,
     });
 
     sendNotification(
@@ -419,8 +458,9 @@ export const sendUserMessage = async (
   }
 };
 
-
-//  GET USER-TO-USER CHAT HISTORY
+// ------------------------------------------
+// 📥 GET USER-TO-USER CHAT HISTORY
+// ------------------------------------------
 export const getUserChatHistory = async (
   req: Request,
   res: Response,
@@ -429,7 +469,6 @@ export const getUserChatHistory = async (
   try {
     const currentUserId = getUserId(req)?.toString();
 
-    // ✅ Use generic parser for all query params
     const {
       page,
       limit,
@@ -459,7 +498,6 @@ export const getUserChatHistory = async (
     const currentUserObjectId = new mongoose.Types.ObjectId(currentUserId);
     const filterUserObjectId = new mongoose.Types.ObjectId(filterUserId);
 
-    // Mark messages as read
     await Message.updateMany(
       {
         messageType: 'user',
@@ -488,7 +526,6 @@ export const getUserChatHistory = async (
     }
 
     const totalCount = await Message.countDocuments(baseQuery);
-
     const { skip } = getPagination(page, limit);
 
     const { projection: projectFields, mode } = buildProjection(projection);
@@ -505,12 +542,21 @@ export const getUserChatHistory = async (
       .skip(skip)
       .limit(limit);
 
-    const formattedMessages = messages.map((msg) => ({
-      ...(msg.message && { message: msg.message }),
-      ...(msg.timestamp && { timestamp: msg.timestamp }),
-      ...(msg.isRead !== undefined && { isRead: msg.isRead }),
-      direction: msg.senderId?.toString() === currentUserId ? 'sent' : 'received',
-    }));
+    const formattedMessages = messages.map((msg) => {
+      let decryptedMessage = '🔐 Unable to decrypt';
+      try {
+        decryptedMessage = decrypt(msg.message, msg.iv);
+      } catch (err) {
+        console.warn(` Failed to decrypt message with ID: ${msg._id}`, err);
+      }
+
+      return {
+        message: decryptedMessage,
+        timestamp: msg.timestamp,
+        isRead: msg.isRead,
+        direction: msg.senderId?.toString() === currentUserId ? 'sent' : 'received',
+      };
+    });
 
     req.apiResponse = {
       success: true,
@@ -528,8 +574,9 @@ export const getUserChatHistory = async (
     next(err);
   }
 };
-
-// GET MY CONTACTS
+// ---------------------------
+// 📇 GET MY CONTACTS
+// ---------------------------
 
 export const getMyContacts = async (
   req: Request,
@@ -538,7 +585,6 @@ export const getMyContacts = async (
 ) => {
   try {
     const currentUserId = getUserId(req)?.toString();
-
     const { userId: filterUserId } = req.body;
 
     const {
@@ -558,9 +604,9 @@ export const getMyContacts = async (
     }
 
     const { skip, limit: safeLimit } = getPagination(page, limit);
-    const { projection: mongoProjection, mode } = buildProjection(projection);
+    const { projection: mongoProjection } = buildProjection(projection);
 
-    // CASE 1: Specific user's chat history
+    // ✅ CASE 1: Chat history with a specific user
     if (filterUserId) {
       if (filterUserId === currentUserId) {
         return res.status(400).json({
@@ -591,11 +637,21 @@ export const getMyContacts = async (
         const formatted: any = {
           direction: msg.senderId?.toString() === currentUserId ? 'sent' : 'received',
         };
+
+        // ✅ Decrypt message
+        try {
+          formatted.message = decrypt(msg.message, msg.iv);
+        } catch {
+          formatted.message = '🔐 Unable to decrypt';
+        }
+
+        // Add other fields except id/meta
         for (const key of Object.keys(msg)) {
-          if (!['senderId', 'receiverId', '_id'].includes(key)) {
+          if (!['senderId', 'receiverId', '_id', 'message', 'iv'].includes(key)) {
             formatted[key] = msg[key];
           }
         }
+
         return formatted;
       });
 
@@ -613,7 +669,7 @@ export const getMyContacts = async (
       return next();
     }
 
-    //  CASE 2: Get my contacts
+    // ✅ CASE 2: Get contact list
     const messageQuery = {
       messageType: 'user',
       $or: [
@@ -636,37 +692,22 @@ export const getMyContacts = async (
 
     const contactIds = Array.from(contactIdSet);
 
-    //  Fetch users
     const users = await User.find({
       _id: { $in: contactIds, $ne: currentUserId },
     }).select('_id first_name last_name');
 
     const userMap = new Map(users.map((u) => [u._id.toString(), u]));
 
-    //  Fetch unread counts from contacts
-    const unreadCounts = await Message.aggregate([
-      {
-        $match: {
-          messageType: 'user',
-          receiverId: new mongoose.Types.ObjectId(currentUserId),
-          senderId: { $in: contactIds.map((id) => new mongoose.Types.ObjectId(id)) },
-          isRead: false,
-        },
-      },
-      {
-        $group: {
-          _id: '$senderId',
-          count: { $sum: 1 },
-        },
-      },
-    ]);
-
-    const unreadMap = new Map<string, number>();
-    unreadCounts.forEach((entry) => {
-      unreadMap.set(entry._id.toString(), entry.count);
+    const unreadDocs = await UnreadCount.find({
+      userId: currentUserId,
+      contactId: { $in: contactIds },
     });
 
-    //  Build response contacts
+    const unreadMap = new Map<string, number>();
+    unreadDocs.forEach((doc) => {
+      unreadMap.set(doc.contactId.toString(), doc.count);
+    });
+
     const contacts = contactIds.map((id) => {
       const user = userMap.get(id);
       return {
