@@ -22,6 +22,7 @@ import storageRoutes from './routes/admin/storageRoutes';
 import { startMessageScheduler } from './utils/schedular';
 import memberPaymentRoutes from './routes/admin/memberPaymentRoutes';
 import cors from 'cors';
+import { errorHandler } from '../multi-role-auth-backend/middleware/errorHandler';
 
 dotenv.config(); 
 
@@ -54,7 +55,7 @@ app.use('/api', memberPaymentRoutes);
 app.use('/api/members', memberRoutes);
 app.use('/api/members', memberAuthRoutes);
 app.use('/api/notifications/member', notificationMemberRoute);
-
+app.use(errorHandler);
 const specs = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs,{
     customCss: '.swagger-ui { background:#e3f2fd; color: #263238; }', // Example: dark background

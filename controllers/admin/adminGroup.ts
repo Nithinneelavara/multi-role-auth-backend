@@ -74,8 +74,11 @@ export const getAllGroupsWithUsers = async (
       mode: ProjectionMode
     } = buildProjection(projection);
     if (mode === 'invalid') {
-      throw new Error('Projection cannot mix inclusion and exclusion.');
-    }
+  const error = new Error('Projection cannot mix inclusion and exclusion.');
+  (error as any).statusCode = 500;
+  throw error;
+}
+
     const groupProjection: Record<string, 1 | 0> = {};
     const memberProjection: Record<string, 1 | 0> = {};
 
@@ -236,7 +239,7 @@ export const handleJoinRequest = async (
     await request.save();
     req.apiResponse = {
       success: true,
-      message: `Request ${action}ed successfully`,
+      message: `Request ${action === 'approve' ? 'approved' : 'rejected'} successfully`,
     };
     next();
   } catch (error) {
