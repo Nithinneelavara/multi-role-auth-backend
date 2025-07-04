@@ -145,6 +145,7 @@ export const memberForgotPassword = async (req: Request, res: Response) => {
     res.status(200).json({
       success: true,
       message: 'OTP sent successfully to the registered email.',
+      otp,
     });
 
   } catch (error) {

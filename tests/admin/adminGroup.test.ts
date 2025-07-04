@@ -2,11 +2,13 @@
 import axios from 'axios';
 import { config } from '../../config/v1/config';
 
-let token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4NTEwMDY3MDMxNmQ1ODc4YTM3NTBjYSIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1MTUxNjEyNSwiZXhwIjoxNzUxNjAyNTI1fQ.O8tgKhE9B2dWSjDSEGdvYywytRQQfzaLOVtYL6juapk';
+let token: string; 
 let groupId: string; // ← Use this across tests
 let pendingRequestId: string;
 let anotherPendingRequestId: string;
 let another: string;
+let invalid_groupId: string;
+let validGroupId: string ;
 
 beforeAll(async () => {
   // Ensure your server is already running before this test
@@ -27,9 +29,6 @@ beforeAll(async () => {
   groupId = groupRes.data.data._id;
  
 });
-
-
-
 
 describe('Admin Create Group', () => {
   it('should create a group successfully', async () => {
@@ -334,7 +333,7 @@ describe('Admin Update Group', () => {
 
 
 
-  const invalid_groupId = 'hdu2993ydh376932y9dh92';
+  invalid_groupId = 'hdu2993ydh376932y9dh92';
   it('should handle invalid group ID gracefully', async () => {
     const response = await axios.put(
       `${config.TEST_BASE_URL}/admin/groups/${invalid_groupId}`,
@@ -382,3 +381,96 @@ describe('Admin Delete Group', () => {
     expect(response.status).toBe(500);
   });
 });
+
+//notifyAllGroups
+describe('POST /api/admin/groups/notify', () => {
+  it('should send socket notification to all approved members', async () => {
+    const response = await axios.post(
+      `${config.TEST_BASE_URL}/admin/groups/notify`,
+      { message: 'Test broadcast to all my groups' },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.data.success).toBe(true);
+    expect(response.data.message).toMatch(/Socket notification sent/i);
+  });
+
+  it('should fail if no message is provided', async () => {
+    const response = await axios.post(
+      `${config.TEST_BASE_URL}/admin/groups/notify`,
+      {},
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        validateStatus: () => true,
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.data.success).toBe(false);
+    expect(response.data.message).toMatch(/Notification message is required/i);
+  });
+});
+
+//notifySpecificGroup
+describe('POST /api/admin/groups/:groupId/notify', () => {
+   validGroupId = '685a65d506f0c24a6fdcd5b8'; // Replace with a valid group ID
+  it('should notify a specific group with a message', async () => {
+    const response = await axios.post(
+      `${config.TEST_BASE_URL}/admin/groups/${validGroupId}/notify`,
+      { message: 'Hello specific group!' },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.data.success).toBe(true);
+    expect(response.data.message).toMatch(/Notification sent/i);
+  });
+
+  it('should fail if groupId is invalid or unauthorized', async () => {
+  const invalid_groupId1 = 'cvghwdftf2t37887dgjskdg723';
+  const response = await axios.post(
+    `${config.TEST_BASE_URL}/admin/groups/${invalid_groupId1}/notify`,
+    { message: 'Attempting on bad group' },
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      validateStatus: () => true,
+    }
+  );
+
+  expect(response.status).toBe(200);
+  expect(response.data.success).toBe(false);
+  expect(response.data.message).toMatch(/Group not found/i);
+});
+
+});
+
+//getGroupNotifications
+
+describe('POST /api/admin/groups/notifications', () => {
+  it('should return grouped notifications sent by admin', async () => {
+    const response = await axios.post(
+      `${config.TEST_BASE_URL}/admin/groups/notifications`,
+      {},
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.data.success).toBe(true);
+    expect(Array.isArray(response.data.data.results)).toBe(true);
+  });
+
+  it('should filter notifications by groupId', async () => {
+    const response = await axios.post(
+      `${config.TEST_BASE_URL}/admin/groups/notifications`,
+      { groupId: validGroupId },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.data.success).toBe(true);
+    expect(response.data.data.results[0]?.groupId).toBe(validGroupId);
+  });
+});
+
+

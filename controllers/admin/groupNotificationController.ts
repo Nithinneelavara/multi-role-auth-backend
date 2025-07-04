@@ -121,6 +121,13 @@ export const notifySpecificGroup = async (
       return next();
     }
 
+     if (!mongoose.Types.ObjectId.isValid(groupId)) {
+      return res.status(200).json({
+        success: false,
+        message: 'Group not found',
+      });
+    }
+
     const group = await Group.findOne({ _id: groupId, createdBy: adminId });
     if (!group) {
       req.apiResponse = {

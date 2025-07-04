@@ -54,7 +54,7 @@ app.use('/api/member', userGroupRoutes);
 app.use('/api', memberPaymentRoutes);
 app.use('/api/members', memberRoutes);
 app.use('/api/members', memberAuthRoutes);
-app.use('/api/notifications/member', notificationMemberRoute);
+app.use('/api/notifications', notificationMemberRoute);
 app.use(errorHandler);
 const specs = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs,{

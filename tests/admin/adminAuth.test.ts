@@ -69,6 +69,37 @@ describe('GET /admin/dashboard/stats', () => {
   });
 });
 
+
+describe('POST /api/admin/refresh-token', () => {
+  const url = `${config.TEST_BASE_URL}/admin/refresh-token`;
+
+  it('should return 200 and provide new access token if refresh token is valid', async () => {
+    const response = await axios.post(
+      url,
+      {},
+      {
+        headers: {
+          Cookie: cookie,
+        },
+        withCredentials: true,
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.data.success).toBe(true);
+    expect(response.data).toHaveProperty('accessToken');
+  });
+
+  it('should return 401 if refresh token is missing or invalid', async () => {
+    try {
+      await axios.post(url);
+    } catch (error: any) {
+      expect(error.response.status).toBe(401);
+      expect(error.response.data.success).toBe(false);
+    }
+  });
+});
+
 describe('POST /admin/logout', () => {
   const url = `${config.TEST_BASE_URL}/admin/logout`;
 
