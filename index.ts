@@ -22,6 +22,7 @@ import storageRoutes from './routes/admin/storageRoutes';
 import { startMessageScheduler } from './utils/schedular';
 import memberPaymentRoutes from './routes/admin/memberPaymentRoutes';
 import cors from 'cors';
+import { globalErrorHandler } from './middleware/errorHandler';
 
 dotenv.config(); 
 
@@ -42,6 +43,7 @@ app.use(cors());
 app.use(cookieParser());
 app.use(passport.initialize());
 
+
 app.use('/api/admin', adminRoutes);
 app.use('/api/storage', storageRoutes);
 
@@ -54,6 +56,7 @@ app.use('/api', memberPaymentRoutes);
 app.use('/api/members', memberRoutes);
 app.use('/api/members', memberAuthRoutes);
 app.use('/api/notifications/member', notificationMemberRoute);
+app.use(globalErrorHandler);
 
 const specs = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs,{

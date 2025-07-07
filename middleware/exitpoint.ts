@@ -38,11 +38,10 @@ export const exitLogger = (req: Request, res: Response, next: NextFunction) => {
     }
     return oldSend.call(this, body);
   };
-  if (req.apiResponse) {
-    return res
-      .status(res.statusCode < 400 ? 200 : res.statusCode)
-      .send(req.apiResponse);
-  }
+ if (req.apiResponse) {
+  const { statusCode = 200, ...responseBody } = req.apiResponse;
+  return res.status(statusCode).send(responseBody);
+}
   const errorMessage = ' Cannot send response: no exit point reached (req.apiResponse not set)';
   console.error('[EXIT ERROR]:', errorMessage);
 
