@@ -3,12 +3,17 @@ import Group from "../../models/db/group";
 import Message from "../../models/db/message";
 import JoinRequest from "../../models/db/joinRequest";
 import { sendNotification, getSocketInstance } from "../../socket";
-import User from '../../models/db/user';
+import User from "../../models/db/user";
 import mongoose from "mongoose";
-import {  parseStandardQueryParams, buildSearchFilterQuery, getPagination, buildProjection, } from "../generic/utils";
-import UnreadCount from '../../models/db/unreadCount';
+import {
+  parseStandardQueryParams,
+  buildSearchFilterQuery,
+  getPagination,
+  buildProjection,
+} from "../generic/utils";
+import UnreadCount from "../../models/db/unreadCount";
 import { encrypt } from "../../utils/encryption";
-import { decrypt } from '../../utils/encryption';
+import { decrypt } from "../../utils/encryption";
 
 // ----------- Helper Function for Safe User ID Extraction -----------
 function getUserId(req: Request): string {
@@ -19,6 +24,7 @@ function getUserId(req: Request): string {
 }
 
 // -------------------- GET AVAILABLE GROUPS --------------------
+
 export const getAvailableGroups = async (
   req: Request,
   res: Response,
@@ -28,30 +34,30 @@ export const getAvailableGroups = async (
     const userId = (req.user as any)._id;
     const { groupId } = req.body;
 
-    const {
-      page,
-      limit,
-      searchTerm,
-      searchFields,
-      filter,
-      projection,
-    } = parseStandardQueryParams(req.body);
+    const { page, limit, searchTerm, searchFields, filter, projection } =
+      parseStandardQueryParams(req.body);
 
     const approvedRequests = await JoinRequest.find({
       userId,
-      status: 'approved',
-    }).select('groupId');
+      status: "approved",
+    }).select("groupId");
 
     const joinedGroupIds = approvedRequests.map((r) => r.groupId.toString());
     const { skip, limit: safeLimit } = getPagination(page, limit);
     const { projection: mongoProjection } = buildProjection(projection);
 
-    // CASE 1: groupId provided → return only that group (if not joined)
+    // ✅ CASE 1: groupId provided → return only that group (if not joined)
     if (groupId) {
+      if (!mongoose.Types.ObjectId.isValid(groupId)) {
+        const error = new Error("Invalid groupId format");
+        (error as any).statusCode = 400;
+        throw error;
+      }
+
       if (joinedGroupIds.includes(groupId)) {
         req.apiResponse = {
           success: true,
-          message: 'Group already joined, not available.',
+          message: "Group already joined, not available.",
           data: {
             totalCount: 0,
             page,
@@ -66,7 +72,7 @@ export const getAvailableGroups = async (
       if (!group) {
         req.apiResponse = {
           success: false,
-          message: 'Group not found',
+          message: "Group not found",
           data: null,
         };
         return next();
@@ -74,7 +80,7 @@ export const getAvailableGroups = async (
 
       req.apiResponse = {
         success: true,
-        message: 'Group retrieved successfully',
+        message: "Group retrieved successfully",
         data: {
           totalCount: 1,
           page,
@@ -85,7 +91,7 @@ export const getAvailableGroups = async (
       return next();
     }
 
-    // CASE 2: No groupId → return all available groups
+    // ✅ CASE 2: No groupId → return all available groups
     const baseQuery: any = {
       _id: { $nin: joinedGroupIds },
       ...filter,
@@ -100,7 +106,7 @@ export const getAvailableGroups = async (
 
     req.apiResponse = {
       success: true,
-      message: 'Available groups retrieved successfully',
+      message: "Available groups retrieved successfully",
       data: {
         totalCount,
         page,
@@ -109,14 +115,14 @@ export const getAvailableGroups = async (
       },
     };
 
-    next();
+    return next();
   } catch (err) {
     next(err);
   }
 };
 
-
 // -------------------- SEND JOIN REQUEST --------------------
+
 export const sendJoinRequest = async (
   req: Request,
   res: Response,
@@ -126,24 +132,36 @@ export const sendJoinRequest = async (
     const userId = getUserId(req);
     const { groupId } = req.body;
 
+    // ✅ Validate groupId format early
+    if (!mongoose.Types.ObjectId.isValid(groupId)) {
+      const error = new Error("Invalid groupId format");
+      (error as any).statusCode = 400;
+      throw error;
+    }
+
+    // ✅ Check if group exists
     const group = await Group.findById(groupId);
     if (!group) {
       req.apiResponse = {
+        statusCode: 404,
         success: false,
         message: "Group not found",
       };
       return next();
     }
 
+    // ✅ Check for duplicate join request
     const existingRequest = await JoinRequest.findOne({ groupId, userId });
     if (existingRequest) {
       req.apiResponse = {
+        statusCode: 400,
         success: false,
         message: "Join request already sent",
       };
       return next();
     }
 
+    // ✅ Create new join request
     const newRequest = new JoinRequest({
       groupId,
       userId,
@@ -152,10 +170,12 @@ export const sendJoinRequest = async (
     await newRequest.save();
 
     req.apiResponse = {
+      statusCode: 201,
       success: true,
       message: "Join request sent successfully",
+      data: { joinRequestId: newRequest._id },
     };
-    next();
+    return next();
   } catch (err) {
     next(err);
   }
@@ -171,20 +191,14 @@ export const getApprovedGroupsForUser = async (
     const userId = getUserId(req);
     const { groupId } = req.body;
 
-    const {
-      page,
-      limit,
-      searchTerm,
-      searchFields,
-      filter,
-      projection,
-    } = parseStandardQueryParams(req.body);
+    const { page, limit, searchTerm, searchFields, filter, projection } =
+      parseStandardQueryParams(req.body);
 
     // Step 1: Get approved group IDs for the user
     const approvedRequests = await JoinRequest.find({
       userId,
-      status: 'approved',
-    }).select('groupId');
+      status: "approved",
+    }).select("groupId");
 
     const approvedGroupIds = approvedRequests.map((req) =>
       req.groupId.toString()
@@ -195,20 +209,30 @@ export const getApprovedGroupsForUser = async (
 
     // CASE 1: specific groupId given — only return that group if approved
     if (groupId) {
+      if (!mongoose.Types.ObjectId.isValid(groupId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid groupId format",
+          data: null,
+        });
+      }
+
       if (!approvedGroupIds.includes(groupId)) {
         req.apiResponse = {
           success: false,
-          message: 'Group not approved or not found',
+          message: "Group not approved or not found",
           data: null,
         };
         return next();
       }
 
-      const specificGroup = await Group.findById(groupId).select(mongoProjection);
+      const specificGroup = await Group.findById(groupId).select(
+        mongoProjection
+      );
       if (!specificGroup) {
         req.apiResponse = {
           success: false,
-          message: 'Group not found',
+          message: "Group not found",
           data: null,
         };
         return next();
@@ -216,7 +240,7 @@ export const getApprovedGroupsForUser = async (
 
       req.apiResponse = {
         success: true,
-        message: 'Group retrieved successfully',
+        message: "Group retrieved successfully",
         data: {
           totalCount: 1,
           page,
@@ -245,8 +269,8 @@ export const getApprovedGroupsForUser = async (
       success: true,
       message:
         approvedGroups.length > 0
-          ? 'Approved groups retrieved successfully'
-          : 'Your group approval is pending',
+          ? "Approved groups retrieved successfully"
+          : "Your group approval is pending",
       data: {
         totalCount,
         page,
@@ -262,6 +286,7 @@ export const getApprovedGroupsForUser = async (
 };
 
 // -------------------- GET MY GROUP MESSAGES (NEW) --------------------
+
 export const getMyGroupMessages = async (
   req: Request,
   res: Response,
@@ -271,14 +296,8 @@ export const getMyGroupMessages = async (
     const userId = getUserId(req);
     const { groupId } = req.body;
 
-    const {
-      page,
-      limit,
-      searchTerm,
-      searchFields,
-      filter,
-      projection,
-    } = parseStandardQueryParams(req.body);
+    const { page, limit, searchTerm, searchFields, filter, projection } =
+      parseStandardQueryParams(req.body);
 
     const approvedRequests = await JoinRequest.find({
       userId,
@@ -287,13 +306,23 @@ export const getMyGroupMessages = async (
 
     const approvedGroupIds = approvedRequests.map((r) => r.groupId.toString());
 
-    if (groupId && !approvedGroupIds.includes(groupId)) {
-      req.apiResponse = {
-        success: false,
-        message: "You are not a member of this group or group not approved.",
-        data: [],
-      };
-      return next();
+    if (groupId) {
+      if (!mongoose.Types.ObjectId.isValid(groupId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid groupId format",
+          data: null,
+        });
+      }
+
+      if (!approvedGroupIds.includes(groupId)) {
+        req.apiResponse = {
+          success: false,
+          message: "You are not a member of this group or group not approved.",
+          data: [],
+        };
+        return next();
+      }
     }
 
     const targetGroupIds = groupId ? [groupId] : approvedGroupIds;
@@ -308,8 +337,7 @@ export const getMyGroupMessages = async (
     const { skip, limit: safeLimit } = getPagination(page, limit);
     const { projection: mongoProjection, mode } = buildProjection(projection);
 
-    // ✅ Always include message & iv for decryption if not explicitly excluded
-    if (mode !== 'exclude') {
+    if (mode !== "exclude") {
       mongoProjection.message = 1;
       mongoProjection.iv = 1;
       mongoProjection.timestamp = 1;
@@ -326,7 +354,10 @@ export const getMyGroupMessages = async (
       .limit(safeLimit)
       .lean();
 
-    const groupedMessages: Record<string, { groupId: string; groupName: string; notifications: any[] }> = {};
+    const groupedMessages: Record<
+      string,
+      { groupId: string; groupName: string; notifications: any[] }
+    > = {};
 
     messages.forEach((msg) => {
       const groupKey = msg.groupId?.toString() || "unknown";
@@ -338,7 +369,7 @@ export const getMyGroupMessages = async (
         };
       }
 
-      let decryptedMessage = '🔐 Unable to decrypt';
+      let decryptedMessage = "🔐 Unable to decrypt";
       try {
         if (msg.message && msg.iv) {
           decryptedMessage = decrypt(msg.message, msg.iv);
@@ -363,7 +394,9 @@ export const getMyGroupMessages = async (
       success: true,
       message:
         result.length > 0
-          ? `Messages ${groupId ? "for group " + groupId : "for your groups"} fetched successfully`
+          ? `Messages ${
+              groupId ? "for group " + groupId : "for your groups"
+            } fetched successfully`
           : "No messages found",
       data: {
         totalCount,
@@ -391,51 +424,79 @@ export const sendUserMessage = async (
     const senderId = getUserId(req)?.toString();
     const { receiverId, message } = req.body;
 
-    if (!receiverId || !message || typeof message !== "string") {
+    // ✅ Validate receiverId presence
+    if (!receiverId) {
       req.apiResponse = {
+        statusCode: 400,
         success: false,
-        message: "receiverId and message are required and must be valid",
+        message: "receiverId is required.",
       };
       return next();
     }
 
-    if (receiverId === senderId) {
+    // ✅ Validate message presence
+    if (!message) {
       req.apiResponse = {
+        statusCode: 400,
+        success: false,
+        message: "message is required.",
+      };
+      return next();
+    }
+
+    // ✅ Ensure message is a string
+    if (typeof message !== "string") {
+      req.apiResponse = {
+        statusCode: 400,
+        success: false,
+        message: "Message must be a valid string.",
+      };
+      return next();
+    }
+
+    // ✅ Prevent user from sending message to themselves
+    if (receiverId?.toString() === senderId?.toString()) {
+      req.apiResponse = {
+        statusCode: 400,
         success: false,
         message: "You cannot send a message to yourself.",
       };
       return next();
     }
 
-    // 🔐 Encrypt message before saving
+    // 🔐 Encrypt message
     const { encryptedData, iv } = encrypt(message);
 
+    // 💾 Save message in DB
     const savedMessage = await Message.create({
       messageType: "user",
       senderId,
       senderModel: "User",
       receiverId,
-      message: encryptedData, // encrypted message
-      iv,                     // store IV with the message
+      message: encryptedData,
+      iv,
       isRead: false,
       timestamp: new Date(),
     });
 
+    // 📬 Update unread count
     await UnreadCount.findOneAndUpdate(
       { userId: receiverId, contactId: senderId },
       { $inc: { count: 1 } },
       { upsert: true, new: true }
     );
 
+    // 📡 Emit socket message
     const io = getSocketInstance();
     io.to(`notification-${receiverId}`).emit(`direct-message-${receiverId}`, {
       fromUserId: senderId,
       toUserId: receiverId,
-      message, // original plain text for real-time use
+      message,
       timestamp: savedMessage.timestamp,
       messageId: savedMessage._id,
     });
 
+    // 🔔 Send persistent notification
     sendNotification(
       receiverId,
       message,
@@ -447,14 +508,16 @@ export const sendUserMessage = async (
       "user"
     );
 
+    // ✅ Success response
     req.apiResponse = {
+      statusCode: 200,
       success: true,
       message: "Message sent successfully",
       data: savedMessage,
     };
-    next();
+    return next();
   } catch (error) {
-    next(error);
+    return next(error);
   }
 };
 
@@ -469,28 +532,25 @@ export const getUserChatHistory = async (
   try {
     const currentUserId = getUserId(req)?.toString();
 
-    const {
-      page,
-      limit,
-      searchTerm,
-      searchFields,
-      filter,
-      projection,
-    } = parseStandardQueryParams(req.body);
+    const { page, limit, searchTerm, searchFields, filter, projection } =
+      parseStandardQueryParams(req.body);
 
     const filterUserId = req.body.userId;
     if (!filterUserId || !mongoose.Types.ObjectId.isValid(filterUserId)) {
       req.apiResponse = {
+        statusCode: 400,
         success: false,
-        message: 'Invalid or missing userId. Please provide a valid userId to fetch chat history.',
+        message:
+          "Invalid or missing userId. Please provide a valid userId to fetch chat history.",
       };
       return next();
     }
 
     if (filterUserId === currentUserId) {
       req.apiResponse = {
+        statusCode: 400,
         success: false,
-        message: 'You cannot view chat history with yourself.',
+        message: "You cannot view chat history with yourself.",
       };
       return next();
     }
@@ -500,7 +560,7 @@ export const getUserChatHistory = async (
 
     await Message.updateMany(
       {
-        messageType: 'user',
+        messageType: "user",
         senderId: filterUserObjectId,
         receiverId: currentUserObjectId,
         isRead: false,
@@ -509,7 +569,7 @@ export const getUserChatHistory = async (
     );
 
     const baseQuery: any = {
-      messageType: 'user',
+      messageType: "user",
       $or: [
         { senderId: currentUserObjectId, receiverId: filterUserObjectId },
         { senderId: filterUserObjectId, receiverId: currentUserObjectId },
@@ -517,11 +577,14 @@ export const getUserChatHistory = async (
     };
 
     if (searchTerm) {
-      const searchQuery = buildSearchFilterQuery(searchFields || ['message'], searchTerm);
+      const searchQuery = buildSearchFilterQuery(
+        searchFields || ["message"],
+        searchTerm
+      );
       Object.assign(baseQuery, searchQuery);
     }
 
-    if (filter && typeof filter === 'object') {
+    if (filter && typeof filter === "object") {
       Object.assign(baseQuery, filter);
     }
 
@@ -529,10 +592,12 @@ export const getUserChatHistory = async (
     const { skip } = getPagination(page, limit);
 
     const { projection: projectFields, mode } = buildProjection(projection);
-    if (mode === 'invalid') {
+    if (mode === "invalid") {
       req.apiResponse = {
+        statusCode: 400,
         success: false,
-        message: 'Invalid projection object. Cannot mix include and exclude fields.',
+        message:
+          "Invalid projection object. Cannot mix include and exclude fields.",
       };
       return next();
     }
@@ -543,7 +608,7 @@ export const getUserChatHistory = async (
       .limit(limit);
 
     const formattedMessages = messages.map((msg) => {
-      let decryptedMessage = '🔐 Unable to decrypt';
+      let decryptedMessage = "🔐 Unable to decrypt";
       try {
         decryptedMessage = decrypt(msg.message, msg.iv);
       } catch (err) {
@@ -554,11 +619,13 @@ export const getUserChatHistory = async (
         message: decryptedMessage,
         timestamp: msg.timestamp,
         isRead: msg.isRead,
-        direction: msg.senderId?.toString() === currentUserId ? 'sent' : 'received',
+        direction:
+          msg.senderId?.toString() === currentUserId ? "sent" : "received",
       };
     });
 
     req.apiResponse = {
+      statusCode: 200,
       success: true,
       message: `Chat history with user ${filterUserId}`,
       data: {
@@ -569,11 +636,12 @@ export const getUserChatHistory = async (
       },
     };
 
-    next();
+    return next();
   } catch (err) {
-    next(err);
+    return next(err);
   }
 };
+
 // ---------------------------
 // 📇 GET MY CONTACTS
 // ---------------------------
@@ -587,19 +655,13 @@ export const getMyContacts = async (
     const currentUserId = getUserId(req)?.toString();
     const { userId: filterUserId } = req.body;
 
-    const {
-      page,
-      limit,
-      searchTerm,
-      searchFields,
-      filter,
-      projection,
-    } = parseStandardQueryParams(req.body);
+    const { page, limit, searchTerm, searchFields, filter, projection } =
+      parseStandardQueryParams(req.body);
 
     if (filterUserId && !mongoose.Types.ObjectId.isValid(filterUserId)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid userId provided.',
+        message: "Invalid userId provided.",
       });
     }
 
@@ -608,15 +670,16 @@ export const getMyContacts = async (
 
     // ✅ CASE 1: Chat history with a specific user
     if (filterUserId) {
-      if (filterUserId === currentUserId) {
-        return res.status(400).json({
-          success: false,
-          message: 'Cannot fetch chat history with yourself.',
-        });
-      }
+      if (filterUserId && filterUserId.toString().trim() === currentUserId?.trim()) {
+  return res.status(400).json({
+    success: false,
+    message: "Cannot fetch chat history with yourself.",
+  });
+}
+
 
       const query = {
-        messageType: 'user',
+        messageType: "user",
         $or: [
           { senderId: currentUserId, receiverId: filterUserId },
           { senderId: filterUserId, receiverId: currentUserId },
@@ -635,19 +698,22 @@ export const getMyContacts = async (
 
       const formattedMessages = messages.map((msg: any) => {
         const formatted: any = {
-          direction: msg.senderId?.toString() === currentUserId ? 'sent' : 'received',
+          direction:
+            msg.senderId?.toString() === currentUserId ? "sent" : "received",
         };
 
         // ✅ Decrypt message
         try {
           formatted.message = decrypt(msg.message, msg.iv);
         } catch {
-          formatted.message = '🔐 Unable to decrypt';
+          formatted.message = "🔐 Unable to decrypt";
         }
 
         // Add other fields except id/meta
         for (const key of Object.keys(msg)) {
-          if (!['senderId', 'receiverId', '_id', 'message', 'iv'].includes(key)) {
+          if (
+            !["senderId", "receiverId", "_id", "message", "iv"].includes(key)
+          ) {
             formatted[key] = msg[key];
           }
         }
@@ -671,11 +737,8 @@ export const getMyContacts = async (
 
     // ✅ CASE 2: Get contact list
     const messageQuery = {
-      messageType: 'user',
-      $or: [
-        { senderId: currentUserId },
-        { receiverId: currentUserId },
-      ],
+      messageType: "user",
+      $or: [{ senderId: currentUserId }, { receiverId: currentUserId }],
       ...filter,
       ...buildSearchFilterQuery(searchFields, searchTerm),
     };
@@ -694,7 +757,7 @@ export const getMyContacts = async (
 
     const users = await User.find({
       _id: { $in: contactIds, $ne: currentUserId },
-    }).select('_id first_name last_name');
+    }).select("_id first_name last_name");
 
     const userMap = new Map(users.map((u) => [u._id.toString(), u]));
 
@@ -712,7 +775,7 @@ export const getMyContacts = async (
       const user = userMap.get(id);
       return {
         userId: id,
-        name: user ? `${user.first_name} ${user.last_name}` : 'Unknown User',
+        name: user ? `${user.first_name} ${user.last_name}` : "Unknown User",
         unreadMessageCount: unreadMap.get(id) || 0,
       };
     });
@@ -721,7 +784,7 @@ export const getMyContacts = async (
 
     req.apiResponse = {
       success: true,
-      message: 'User contacts retrieved successfully',
+      message: "User contacts retrieved successfully",
       data: {
         totalCount: contacts.length,
         page,
@@ -729,6 +792,7 @@ export const getMyContacts = async (
         contacts: paginatedContacts,
       },
     };
+console.log("Decoded currentUserId:", currentUserId);
 
     next();
   } catch (err) {

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import AccessToken from '../../models/db/accessToken';
+import RefreshToken from '../../models/db/refreshToken';
 
 dotenv.config();
 
@@ -25,20 +26,39 @@ export const refreshUserToken = async (
 
     jwt.verify(refreshToken, JWT_SECRET, async (err: any, decoded: any) => {
       if (err || !decoded?.id) {
-        return res.status(403).json({ success: false, message: 'Invalid or expired refresh token' });
+        return res.status(403).json({
+          success: false,
+          message: 'Invalid or expired refresh token',
+        });
       }
 
-      const storedToken = await AccessToken.findOne({ userId: decoded.id, userType: 'user' });
-      if (!storedToken) {
-        return res.status(403).json({ success: false, message: 'No session found for this user' });
+      const storedRefresh = await RefreshToken.findOne({
+        userId: decoded.id,
+        token: refreshToken,
+        userType: 'user',
+      });
+
+      if (!storedRefresh) {
+        return res.status(403).json({
+          success: false,
+          message: 'Refresh token not found or revoked',
+        });
       }
 
-      const newAccessToken = jwt.sign({ id: decoded.id, role: 'user' }, JWT_SECRET, { expiresIn: '1d' });
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const newAccessToken = jwt.sign(
+        { id: decoded.id, role: 'user' },
+        JWT_SECRET,
+        { expiresIn: '1d' }
+      );
 
-      storedToken.token = newAccessToken;
-      storedToken.expiresAt = expiresAt;
-      await storedToken.save();
+      await AccessToken.findOneAndUpdate(
+        { userId: decoded.id, userType: 'user' },
+        {
+          token: newAccessToken,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+        { upsert: true, new: true }
+      );
 
       res.cookie('userToken', newAccessToken, {
         httpOnly: true,

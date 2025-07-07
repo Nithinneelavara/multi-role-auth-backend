@@ -3,7 +3,7 @@ import { notifyMember, getMemberNotifications } from '../../controllers/admin/no
 
 const router = express.Router();
 
-router.post('/', notifyMember);
-router.get('/:userId', getMemberNotifications);
+router.post('/member', notifyMember);
+router.get('/member/:userId', getMemberNotifications);
 
 export default router;

@@ -5,6 +5,8 @@ import { LoginValidation } from '../../validators/loginValidator';
 import { validateRequest } from '../../middleware/validateRequest';
 import { entryLogger } from '../../middleware/entrypoint';
 import { exitLogger } from '../../middleware/exitpoint';
+import { validateForgotPassword, validateResetPassword } from '../../validators/memberAuthValidation';
+ 
 
 const router = express.Router();
 
@@ -161,7 +163,7 @@ router.post('/refresh-token',entryLogger, refreshMemberToken, exitLogger);
  *       200:
  *         description: If the email exists, an OTP has been sent.
  */
-router.post('/forgot-password', entryLogger, memberForgotPassword, exitLogger);
+router.post('/forgot-password',validateForgotPassword,validateRequest, memberForgotPassword, exitLogger);
 
 /**
  * @swagger
@@ -195,6 +197,6 @@ router.post('/forgot-password', entryLogger, memberForgotPassword, exitLogger);
  *       404:
  *         description: Member not found
  */
-router.post('/reset-password', entryLogger, memberResetPassword, exitLogger);
+router.post('/reset-password', entryLogger,validateResetPassword, memberResetPassword, exitLogger);
 
 export default router;
