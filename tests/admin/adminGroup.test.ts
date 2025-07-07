@@ -93,7 +93,80 @@ describe('Admin Create Group', () => {
       expect(err.response.data.message).toMatch(/already exists/i);
     }
   });
+
+
+
+  it('should return 400 if groupName is missing', async () => {
+    try {
+      await axios.post(
+        `${config.TEST_BASE_URL}/admin/groups/create`,
+        {
+          maxUsers: 5,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+    } catch (err: any) {
+      expect(err.response.status).toBe(400);
+      expect(err.response.data.message).toMatch(/group name/i);
+    }
+  });
+
+  it('should return 400 if maxUsers is missing', async () => {
+    try {
+      await axios.post(
+        `${config.TEST_BASE_URL}/admin/groups/create`,
+        {
+          groupName: `invalid-${Date.now()}`,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+    } catch (err: any) {
+      expect(err.response.status).toBe(400);
+      expect(err.response.data.message).toMatch(/maxUsers/i);
+    }
+  });
+
+  it('should trim and lowercase the groupName', async () => {
+    const groupName = `  TeST-Group-${Date.now()}  `;
+
+    const response = await axios.post(
+      `${config.TEST_BASE_URL}/admin/groups/create`,
+      {
+        groupName,
+        maxUsers: 5,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.data.data.groupName).toBe(groupName.trim().toLowerCase());
+  });
+
+  it('should return 401 if token is missing or invalid', async () => {
+    try {
+      await axios.post(
+        `${config.TEST_BASE_URL}/admin/groups/create`,
+        {
+          groupName: `invalid-auth-${Date.now()}`,
+          maxUsers: 5,
+        }
+        // no headers
+      );
+    } catch (err: any) {
+      expect(err.response.status).toBe(401);
+    }
+  });
 });
+
+ 
 
 
 
@@ -311,43 +384,73 @@ describe('Admin Handle Join Request', () => {
 //update group
 
 describe('Admin Update Group', () => {
+  const validGroupId = '685a65d506f0c24a6fdcd5b8';
+  const invalidGroupIdFormat = 'invalid-id'; // Not a valid MongoDB ObjectId
+  const unauthorizedGroupId = '685a65d506f0c24a6fdcd5c9'; // Valid ObjectId but not owned by admin
 
-  const groupId1 ='685a65d506f0c24a6fdcd5b8';
   it('should update group details successfully', async () => {
- 
-
     const response = await axios.put(
-      `${config.TEST_BASE_URL}/admin/groups/${groupId1}`,
-      {
-        groupName: 'exelon interns',
-        maxUsers: 51,
-      },
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
+      `${config.TEST_BASE_URL}/admin/groups/${validGroupId}`,
+      { groupName: 'exelon interns', maxUsers: 51 },
+      { headers: { Authorization: `Bearer ${token}` } }
     );
 
     expect(response.status).toBe(200);
     expect(response.data.success).toBe(true);
   });
 
-
-
-  invalid_groupId = 'hdu2993ydh376932y9dh92';
-  it('should handle invalid group ID gracefully', async () => {
+  it('should return 400 for invalid group ID format', async () => {
     const response = await axios.put(
-      `${config.TEST_BASE_URL}/admin/groups/${invalid_groupId}`,
-      {
-        groupName: 'Invalid',
-        maxUsers: 5,
-      },
+      `${config.TEST_BASE_URL}/admin/groups/${invalidGroupIdFormat}`,
+      { groupName: 'Invalid Group', maxUsers: 5 },
       {
         headers: { Authorization: `Bearer ${token}` },
         validateStatus: () => true,
       }
     );
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(400);
+    expect(response.data.success).toBe(false);
+  });
+
+  it('should return 404 if group not found or not owned by admin', async () => {
+    const response = await axios.put(
+      `${config.TEST_BASE_URL}/admin/groups/${unauthorizedGroupId}`,
+      { groupName: 'Unknown', maxUsers: 5 },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        validateStatus: () => true,
+      }
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.data.success).toBe(false);
+  });
+
+  it('should return 401 if token is missing', async () => {
+    const response = await axios.put(
+      `${config.TEST_BASE_URL}/admin/groups/${validGroupId}`,
+      { groupName: 'No Auth', maxUsers: 10 },
+      {
+        validateStatus: () => true,
+      }
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  it('should return 400 if required fields are missing', async () => {
+    const response = await axios.put(
+      `${config.TEST_BASE_URL}/admin/groups/${validGroupId}`,
+      {}, // Missing groupName and maxUsers
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        validateStatus: () => true,
+      }
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.data.success).toBe(false);
   });
 });
 
@@ -382,6 +485,7 @@ describe('Admin Delete Group', () => {
   });
 });
 
+
 //notifyAllGroups
 describe('POST /api/admin/groups/notify', () => {
   it('should send socket notification to all approved members', async () => {
@@ -410,7 +514,66 @@ describe('POST /api/admin/groups/notify', () => {
     expect(response.data.success).toBe(false);
     expect(response.data.message).toMatch(/Notification message is required/i);
   });
+
+  describe('POST /api/admin/groups/notify', () => {
+  it('should send socket notification to all approved members', async () => {
+    const response = await axios.post(
+      `${config.TEST_BASE_URL}/admin/groups/notify`,
+      { message: 'Test broadcast to all my groups' },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.data.success).toBe(true);
+    expect(response.data.message).toMatch(/Socket notification sent/i);
+  });
+
+  it('should fail if no message is provided', async () => {
+    const response = await axios.post(
+      `${config.TEST_BASE_URL}/admin/groups/notify`,
+      {},
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        validateStatus: () => true,
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.data.success).toBe(false);
+    expect(response.data.message).toMatch(/Notification message is required/i);
+  });
+
+  it('should fail if message is not a string', async () => {
+    const response = await axios.post(
+      `${config.TEST_BASE_URL}/admin/groups/notify`,
+      { message: 12345 }, // number instead of string
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        validateStatus: () => true,
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.data.success).toBe(false);
+    expect(response.data.message).toMatch(/Notification message is required/i);
+  });
+
+  it('should fail if unauthorized (no token)', async () => {
+    const response = await axios.post(
+      `${config.TEST_BASE_URL}/admin/groups/notify`,
+      { message: 'No token here' },
+      {
+        validateStatus: () => true,
+      }
+    );
+
+    expect(response.status).toBe(401);
+  });
 });
+
+});
+
+
 
 //notifySpecificGroup
 describe('POST /api/admin/groups/:groupId/notify', () => {
@@ -442,12 +605,43 @@ describe('POST /api/admin/groups/:groupId/notify', () => {
   expect(response.data.success).toBe(false);
   expect(response.data.message).toMatch(/Group not found/i);
 });
+it('should fail if message and fileName are both missing', async () => {
+    const response = await axios.post(
+      `${config.TEST_BASE_URL}/admin/groups/${validGroupId}/notify`,
+      {}, // No message or fileName
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        validateStatus: () => true,
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.data.success).toBe(false);
+    expect(response.data.message).toMatch(/Message or fileName is required/i);
+  });
+
+
+  it('should schedule notification if scheduledTime is provided', async () => {
+    const scheduledTime = new Date(Date.now() + 60000); // 1 min later
+
+    const response = await axios.post(
+      `${config.TEST_BASE_URL}/admin/groups/${validGroupId}/notify`,
+      { message: 'Scheduled message', scheduledTime },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.data.success).toBe(true);
+    expect(response.data.message).toMatch(/Notification sent/i);
+  });
 
 });
 
 //getGroupNotifications
 
-describe('POST /api/admin/groups/notifications', () => {
+describe('POST /api/admin/groups/notifications  getGroupNotifications', () => {
   it('should return grouped notifications sent by admin', async () => {
     const response = await axios.post(
       `${config.TEST_BASE_URL}/admin/groups/notifications`,
@@ -471,6 +665,60 @@ describe('POST /api/admin/groups/notifications', () => {
     expect(response.data.success).toBe(true);
     expect(response.data.data.results[0]?.groupId).toBe(validGroupId);
   });
+
+  it('should return empty results if no notifications are found', async () => {
+  const response = await axios.post(
+    `${config.TEST_BASE_URL}/admin/groups/notifications`,
+    { groupId: '000000000000000000000000' }, // unlikely ID
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  expect(response.status).toBe(200);
+  expect(response.data.success).toBe(true);
+  expect(response.data.data.results.length).toBe(0);
+  expect(response.data.message).toMatch(/no notifications found/i);
+});
+it('should ignore invalid groupId format and return all notifications', async () => {
+  const response = await axios.post(
+    `${config.TEST_BASE_URL}/admin/groups/notifications`,
+    { groupId: 'invalid-id-format' },
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  expect(response.status).toBe(200);
+  expect(response.data.success).toBe(true);
+  expect(Array.isArray(response.data.data.results)).toBe(true);
+});
+
+it('should filter notifications using search term and fields', async () => {
+  const response = await axios.post(
+    `${config.TEST_BASE_URL}/admin/groups/notifications`,
+    {
+      searchTerm: 'hello', // assuming 'hello' is part of some message
+      searchFields: ['message'],
+    },
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  expect(response.status).toBe(200);
+  expect(response.data.success).toBe(true);
+  expect(Array.isArray(response.data.data.results)).toBe(true);
+});
+
+it('should throw error for invalid projection mixing include and exclude', async () => {
+  try {
+    await axios.post(
+      `${config.TEST_BASE_URL}/admin/groups/notifications`,
+      {
+        projection: { message: 1, iv: 0 }, // Invalid: mix of inclusion/exclusion
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+  } catch (err: any) {
+    expect(err.response.status).toBe(500); // Assuming your error middleware sets this
+    expect(err.response.data.success).toBe(false);
+  }
+});
 });
 
 

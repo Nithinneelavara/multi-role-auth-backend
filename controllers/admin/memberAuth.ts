@@ -7,6 +7,8 @@ import AccessToken from '../../models/db/accessToken';
 import RefreshToken from '../../models/db/refreshToken';
 import OtpToken from '../../models/db/otpToken';
 import { sendOtpEmail } from '../../services/Email/nodemailer';
+import validator from "validator"; // ensure this is imported
+
 
 dotenv.config();
 
@@ -30,6 +32,18 @@ export const memberLogin = async (req: Request, res: Response, next: NextFunctio
       return;
     }
 
+    if (!email) {
+   res.status(400).json({ success: false, message: 'Email is required' });
+   return
+}
+if (!validator.isEmail(email)) {
+   res.status(400).json({ success: false, message: 'Invalid email format' });
+   return
+}
+if (!password) {
+   res.status(400).json({ success: false, message: 'Password is required' });
+   return
+}
     const accessToken = jwt.sign({ id: member._id, role: 'member' }, JWT_SECRET, { expiresIn: '1d' });
     const refreshToken = jwt.sign({ id: member._id }, JWT_SECRET, { expiresIn: '30d' });
 
@@ -117,6 +131,19 @@ export const memberForgotPassword = async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
 
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required',
+      });
+    }
+
+    if (!validator.isEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email format',
+      });
+    }
     // Step 1: Check if member exists
     const member = await Member.findOne({ email });
 
@@ -165,6 +192,7 @@ export const memberResetPassword = async (req: Request, res: Response) => {
         message: 'Email, OTP, and new password are required.',
       });
     }
+    
 
     const otpEntry = await OtpToken.findOne({ email, otp });
 

@@ -1,5 +1,3 @@
-
-//jest.config.cjs
 const { createDefaultPreset } = require("ts-jest");
 
 const tsJestTransformCfg = createDefaultPreset().transform;
@@ -10,5 +8,6 @@ module.exports = {
   transform: {
     ...tsJestTransformCfg,
   },
-  testMatch: ["**/tests/admin/adminGroup.test.ts"], // ✅ Only run this test file
+  testMatch: ["**/tests/admin/storageController.test.ts"], // ✅ test path
+  // Do NOT add: extensionsToTreatAsEsm
 };

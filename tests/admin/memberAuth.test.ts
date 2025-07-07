@@ -9,7 +9,7 @@ const headers = { Authorization: "" };
 
 const member = {
   email: "ravi.kumar@example.com",
-  password: "SecurePass123",
+  password: "NewMember@Pass20251",
 };
 
 describe("POST /api/members/login", () => {
@@ -32,12 +32,67 @@ describe("POST /api/members/login", () => {
     try {
       await axios.post(url, {
         email: member.email,
-        password: "WrongPassword123",
+        password: "WrongPassword125",
       });
     } catch (error: any) {
       expect(error.response.status).toBe(401);
       expect(error.response.data.success).toBe(false);
       expect(error.response.data.message).toBe("Invalid email or password");
+    }
+  });
+  it("should return 401 for non-existent email", async () => {
+    try {
+      await axios.post(url, {
+        email: "non.existent@example.com",
+        password: "AnyPassword123",
+      });
+    } catch (error: any) {
+      expect(error.response.status).toBe(401);
+      expect(error.response.data.success).toBe(false);
+      expect(error.response.data.message).toBe("Invalid email or password");
+    }
+  });
+
+  it("should return 400 if email is missing", async () => {
+    try {
+      await axios.post(url, { password: "AnyPassword" });
+    } catch (error: any) {
+      expect(error.response.status).toBe(400);
+      expect(error.response.data.success).toBe(false);
+      expect(error.response.data.message).toMatch(/email is required/i);
+    }
+  });
+
+  it("should return 400 if password is missing", async () => {
+    try {
+      await axios.post(url, { email: member.email });
+    } catch (error: any) {
+      expect(error.response.status).toBe(400);
+      expect(error.response.data.success).toBe(false);
+      expect(error.response.data.message).toMatch(/password is required/i);
+    }
+  });
+
+  it("should return 400 for empty request body", async () => {
+    try {
+      await axios.post(url, {});
+    } catch (error: any) {
+      expect(error.response.status).toBe(400);
+      expect(error.response.data.success).toBe(false);
+      expect(error.response.data.message).toMatch(/email.*required/i);
+    }
+  });
+
+  it("should return 400 for malformed email", async () => {
+    try {
+      await axios.post(url, {
+        email: "not-an-email",
+        password: "SomePassword",
+      });
+    } catch (error: any) {
+      expect(error.response.status).toBe(400);
+      expect(error.response.data.success).toBe(false);
+      expect(error.response.data.message).toMatch(/Valid email is required/i);
     }
   });
 });
@@ -70,6 +125,25 @@ describe("POST /api/members/refresh-token", () => {
       expect(error.response.status).toBe(401);
     }
   });
+
+  it("should return 403 for invalid token", async () => {
+    try {
+      await axios.post(
+        url,
+        {},
+        {
+          headers: {
+            Cookie: `refreshToken=invalidtoken`,
+          },
+          withCredentials: true,
+        }
+      );
+    } catch (error: any) {
+      expect(error.response.status).toBe(403);
+      expect(error.response.data.message).toBe("Invalid or expired refresh token");
+    }
+  });
+
 });
 
 describe("POST /api/members/forgot-password", () => {
@@ -89,7 +163,27 @@ describe("POST /api/members/forgot-password", () => {
     } catch (error: any) {
       expect(error.response.status).toBe(400);
       expect(error.response.data.success).toBe(false);
-      expect(error.response.data.message).toBe("Valid email is required");
+      expect(error.response.data.message).toBe("Email is required");
+    }
+  });
+
+  it("should return 400 when email format is invalid", async () => {
+    try {
+      await axios.post(url, { email: "invalid-email" });
+    } catch (error: any) {
+      expect(error.response.status).toBe(400);
+      expect(error.response.data.success).toBe(false);
+      expect(error.response.data.message).toBe("Email is required");
+    }
+  });
+
+  it("should return 404 when email does not exist", async () => {
+    try {
+      await axios.post(url, { email: "notfound@example.com" });
+    } catch (error: any) {
+      expect(error.response.status).toBe(404);
+      expect(error.response.data.success).toBe(false);
+      expect(error.response.data.message).toBe("Email does not exist in our records.");
     }
   });
 });
@@ -101,7 +195,7 @@ describe("POST /api/members/reset-password", () => {
     const res = await axios.post(url, {
       email: member.email,
       otp,
-      newPassword: "NewMember@Pass2025",
+      newPassword: "NewMember@Pass20252",
     });
 
     expect(res.status).toBe(200);
@@ -122,6 +216,21 @@ describe("POST /api/members/reset-password", () => {
       expect(error.response.data.message).toBe("Invalid or expired OTP.");
     }
   });
+   it("should return 400 when required fields are missing", async () => {
+    try {
+      await axios.post(url, {
+        email: member.email,
+        newPassword: "SomePassword123",
+        // OTP missing
+      });
+    } catch (error: any) {
+      expect(error.response.status).toBe(400);
+      expect(error.response.data.success).toBe(false);
+      expect(error.response.data.message).toBe("Email, OTP, and new password are required.");
+    }
+  });
+
+   
 });
 
 describe("POST /api/members/logout", () => {
