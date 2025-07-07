@@ -8,6 +8,6 @@ module.exports = {
   transform: {
     ...tsJestTransformCfg,
   },
-  testMatch: ["**/tests/admin/storageController.test.ts"], // ✅ test path
+  testMatch: ["**/tests/admin/webhook.test.ts"], // ✅ test path
   // Do NOT add: extensionsToTreatAsEsm
 };
