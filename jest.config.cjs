@@ -8,5 +8,5 @@ module.exports = {
   transform: {
     ...tsJestTransformCfg,
   },
-  testMatch: ["**/tests/admin/adminAuth.test.ts"], // ✅ Only run this test file
+  testMatch: ["**/tests/user/userGroup.test.ts"], 
 };
