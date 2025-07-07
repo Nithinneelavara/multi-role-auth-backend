@@ -20,7 +20,7 @@ const generateS3Url = (fileName: string): string => {
 };
 
 export const startMessageScheduler = () => {
-  cron.schedule('* * * * *', async () => {
+  cron.schedule('0 * * * *', async () => {
     try {
       const now = dayjs().tz("Asia/Kolkata").toDate();
 

@@ -43,6 +43,14 @@ export const notifyGroupMembersViaSocket = async (
       };
       return next();
     }
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      req.apiResponse = {
+        success: false,
+        message: 'Notification message is required.',
+      };
+      return next();
+    }
+
 
     const groups = await Group.find({ createdBy: adminId });
     if (!groups.length) {
@@ -120,6 +128,20 @@ export const notifySpecificGroup = async (
       };
       return next();
     }
+
+     if (!mongoose.Types.ObjectId.isValid(groupId)) {
+      return res.status(200).json({
+        success: false,
+        message: 'Group not found',
+      });
+    }
+    if (!groupId || (!message && !fileName)) {
+  req.apiResponse = {
+    success: false,
+    message: 'Message or fileName is required.',
+  };
+  return next();
+}
 
     const group = await Group.findOne({ _id: groupId, createdBy: adminId });
     if (!group) {
@@ -217,6 +239,9 @@ export const getGroupNotifications = async (
     if (mode === 'invalid') {
       throw new Error('Projection cannot mix inclusion and exclusion.');
     }
+
+    
+
 
     if (mode !== 'exclude') {
       cleanProjection.groupId = 1;

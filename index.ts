@@ -76,8 +76,9 @@ initSocket(server);
 
 connectDB().then(async() => {
   await seedAdminUser(); 
+  if (process.env.NODE_ENV !== 'test'){
   server.listen(PORT, () => { 
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`Swagger docs at http://localhost:${PORT}/api-docs`);
   });
-});
+}});

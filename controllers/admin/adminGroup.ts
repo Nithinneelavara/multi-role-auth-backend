@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import Group from "../../models/db/group";
 import JoinRequest from "../../models/db/joinRequest";
 import { buildSearchFilterQuery, getPagination, buildProjection, ProjectionMode  } from "../../controllers/generic/utils";
+import mongoose from "mongoose";
 
 // ----------- Helper Function for Safe User ID Extraction -----------
 function getUserId(req: Request): string {
@@ -19,8 +20,24 @@ export const createGroup = async (
 ) => {
   try {
     let { groupName, maxUsers } = req.body;
+
+    if (!groupName || typeof groupName !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: "Group name is required and must be a string.",
+      });
+    }
+
+    if (typeof maxUsers !== 'number' || maxUsers <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "maxUsers must be a positive number.",
+      });
+    }
+
     const adminId = getUserId(req);
     groupName = groupName.trim().toLowerCase();
+
     const existingGroup = await Group.findOne({ groupName });
     if (existingGroup) {
       return res.status(400).json({
@@ -28,12 +45,14 @@ export const createGroup = async (
         message: "Group with the same name already exists in the database.",
       });
     }
+
     const group = await Group.create({
       groupName,
       maxUsers,
       members: [],
       createdBy: adminId,
     });
+
     req.apiResponse = {
       success: true,
       message: "Group created successfully",
@@ -44,13 +63,13 @@ export const createGroup = async (
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message:
-          "Group with the same name already exists (duplicate key error).",
+        message: "Group with the same name already exists (duplicate key error).",
       });
     }
     next(error);
   }
 };
+
 
 // ------------------ GET ALL GROUPS (WITH MEMBERS) ------------------
 export const getAllGroupsWithUsers = async (
@@ -74,8 +93,11 @@ export const getAllGroupsWithUsers = async (
       mode: ProjectionMode
     } = buildProjection(projection);
     if (mode === 'invalid') {
-      throw new Error('Projection cannot mix inclusion and exclusion.');
-    }
+  const error = new Error('Projection cannot mix inclusion and exclusion.');
+  (error as any).statusCode = 500;
+  throw error;
+}
+
     const groupProjection: Record<string, 1 | 0> = {};
     const memberProjection: Record<string, 1 | 0> = {};
 
@@ -236,7 +258,7 @@ export const handleJoinRequest = async (
     await request.save();
     req.apiResponse = {
       success: true,
-      message: `Request ${action}ed successfully`,
+      message: `Request ${action === 'approve' ? 'approved' : 'rejected'} successfully`,
     };
     next();
   } catch (error) {
@@ -255,6 +277,22 @@ export const updateGroup = async (
     const { groupName, maxUsers } = req.body;
     const adminId = getUserId(req);
 
+    // Validate ObjectId
+    if (!mongoose.isValidObjectId(groupId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid group ID format',
+      });
+    }
+
+    // Validate request body
+    if (!groupName || !maxUsers) {
+      return res.status(400).json({
+        success: false,
+        message: 'groupName and maxUsers are required',
+      });
+    }
+
     const updatedGroup = await Group.findOneAndUpdate(
       { _id: groupId, createdBy: adminId },
       { groupName, maxUsers },
@@ -262,16 +300,15 @@ export const updateGroup = async (
     );
 
     if (!updatedGroup) {
-      req.apiResponse = {
+      return res.status(404).json({
         success: false,
-        message: "Group not found or unauthorized",
-      };
-      return next();
+        message: 'Group not found or unauthorized',
+      });
     }
 
     req.apiResponse = {
       success: true,
-      message: "Group updated successfully",
+      message: 'Group updated successfully',
       data: updatedGroup,
     };
     next();

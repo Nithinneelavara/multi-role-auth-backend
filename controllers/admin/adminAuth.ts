@@ -25,20 +25,41 @@ export const adminLogin = async (
 ): Promise<void> => {
   try {
     const { email, password } = req.body;
+
+    // ✅ Input validation
+    if (!email || typeof email !== 'string') {
+      res.status(400).json({ success: false, message: 'Email is required and must be a string' });
+      return;
+    }
+
+    if (!password || typeof password !== 'string') {
+      res.status(400).json({ success: false, message: 'Password is required and must be a string' });
+      return;
+    }
+
+    // ✅ Find admin
     const admin = await Admin.findOne({ email });
     if (!admin) {
       res.status(401).json({ success: false, message: 'Invalid email or password' });
       return;
     }
+
+    // ✅ Compare password
     const isMatch = await bcrypt.compare(password, admin.password);
     if (!isMatch) {
       res.status(401).json({ success: false, message: 'Invalid email or password' });
       return;
     }
+
+    // ✅ Generate tokens
     const accessToken = jwt.sign({ id: admin._id, role: 'admin' }, JWT_SECRET, { expiresIn: '1d' });
     const refreshToken = jwt.sign({ id: admin._id }, JWT_SECRET, { expiresIn: '30d' });
+
+    // ✅ Remove old tokens
     await AccessToken.deleteMany({ userId: admin._id, userType: 'admin' });
     await RefreshToken.deleteMany({ userId: admin._id, userType: 'admin' });
+
+    // ✅ Store new tokens
     await AccessToken.create({
       userId: admin._id,
       userType: 'admin',
@@ -51,6 +72,7 @@ export const adminLogin = async (
       token: refreshToken,
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     });
+    // ✅ Send response with cookies
     res
       .cookie('adminToken', accessToken, {
         httpOnly: true,
@@ -126,7 +148,9 @@ export const getAdminStats = async (
       timestamp: { $gte: oneMonthAgo },
       senderModel: 'User',
     });
-    const activeUsersCount = activeUserIds.length;
+
+    const activeUsersCount = activeUserIds?.length ?? 0;
+
     res.status(200).json({
       success: true,
       data: {
@@ -137,6 +161,10 @@ export const getAdminStats = async (
       },
     });
   } catch (error) {
-    next(error);
+    console.error('Error in getAdminStats:', error); // helpful in dev
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch dashboard stats',
+    });
   }
 };

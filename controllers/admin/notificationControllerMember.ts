@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { sendNotification } from '../../socket/index';
 import { MemberNotification } from '../../models/db/memberNotification';
+import mongoose from 'mongoose';
+import Member from '../../models/db/member';
 
 export const notifyMember = async (req: Request, res: Response) => {
   try {
@@ -10,6 +12,15 @@ export const notifyMember = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'memberId and message are required' });
     }
 
+     if (!mongoose.Types.ObjectId.isValid(memberId)) {
+      return res.status(400).json({ error: 'Invalid memberId format' });
+    }
+
+    const memberExists = await Member.findById(memberId);
+    if (!memberExists) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+    
     await MemberNotification.create({
       userId: memberId,
       message,
@@ -28,9 +39,13 @@ export const notifyMember = async (req: Request, res: Response) => {
 
 export const getMemberNotifications = async (req: Request, res: Response) => {
   try {
-    const { memberId } = req.params;
+    const { userId } = req.params;
 
-    const notifications = await MemberNotification.find({ userId: memberId }).sort({ createdAt: -1 });
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ error: 'Invalid memberId format' });
+    }
+
+    const notifications = await MemberNotification.find({ userId }).sort({ createdAt: -1 });
 
     return res.status(200).json(notifications);
   } catch (error) {
